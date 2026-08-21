@@ -24,6 +24,8 @@ on disk.
   untrack it — all without leaving Neovim.
 - **README preview** (with `render-markdown.nvim` if installed) or a file
   tree when there's no README.
+- **Italian / English UI**, switchable live from inside the dashboard (`L`)
+  or fixed via the `language` option.
 - Mouse support, scrollbars, responsive single/two-column layout.
 
 | | |
@@ -82,6 +84,8 @@ Defaults (everything is optional):
 
 ```lua
 require("projecthub").setup({
+  language = "en", -- "en" or "it" — switch anytime with the L key, or
+                    -- require("projecthub").set_language("it"|"en")
   roots = {},   -- { { "~/Projects", depth }, ... }
   extra = {},   -- { "~/some/single/project", ... }
   me = {
@@ -124,6 +128,7 @@ touches your dotfiles.
 | `n` / `e` | edit the project's note |
 | `c` | expand/collapse full commit history |
 | `g` | open the project on GitHub |
+| `L` | switch the UI language (Italian ⇄ English) |
 | `q` / `Esc` | close (or cancel the folder browser) |
 
 ## License

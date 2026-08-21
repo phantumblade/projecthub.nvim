@@ -2,6 +2,11 @@ local M = {}
 
 --- Configurazione di default. Sovrascrivibile tramite require("projecthub").setup({...}).
 M.defaults = {
+  -- Lingua dell'interfaccia: "it" oppure "en". Cambiabile a runtime con
+  -- require("projecthub").set_language("it"|"en"), o dal tasto L nella
+  -- dashboard stessa.
+  language = "en",
+
   -- Cartelle-contenitore da scansionare per trovare progetti.
   -- { percorso, profondita_di_scansione }
   roots = {},
@@ -28,7 +33,7 @@ M.defaults = {
     width = 0.90,
     height = 0.85,
     left_ratio = 0.48, -- quota lista schede vs anteprima
-    min_card = 34, -- sotto questa larghezza si passa a una colonna sola
+    min_card = 38, -- punto di equilibrio ideale: 2 colonne per finestre normali, 1 colonna un pelino prima quando si stringe o zoomma
   },
 
   -- Callback invocata quando apri un progetto (tasto Enter). Riceve il

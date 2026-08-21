@@ -2,8 +2,35 @@
 -- anteprima del README (o albero delle cartelle) a destra.
 local P = require("projecthub.projects")
 local config = require("projecthub.config")
+local i18n = require("projecthub.i18n")
 
-local M = {}
+local ICON_ERROR = "\u{f0156}"
+local ICON_SUCCESS = "\u{f012c}"
+local ICON_GLOBE = "\u{f059f}"
+local ICON_LOCK = "\u{f033e}"
+local ICON_DOC = "\u{f0219}"
+local ICON_FOLDER = "\u{f024f}"
+local ICON_GIT = "\u{f02a2}"
+local ICON_CLOCK = "\u{f00ed}"
+local ICON_TEAM = "\u{f04d3}"
+local ICON_NOTE = "\u{f082e}"
+local ICON_FOLDER_INSPECT = "\u{f02dc}"
+local ICON_RELOCATE = "\u{f06d2}"
+local ICON_GITHUB = "\u{f02a4}"
+local ICON_ADD = "\u{f03d4}"
+local ICON_HISTORY = "\u{f02da}"
+local ICON_OVERVIEW = "\u{e66a}"
+local ICON_TRASH = "\u{f0a79}"
+local ICON_UP_DIR = "\u{f005d}"
+
+local M = {
+  active_st = nil,
+}
+
+function M.is_open()
+  return M.active_st and M.active_st.list and vim.api.nvim_win_is_valid(M.active_st.list.win)
+end
+
 local ns = vim.api.nvim_create_namespace("projecthub")
 local ns_html = vim.api.nvim_create_namespace("projecthub_html")
 local ns_sb = vim.api.nvim_create_namespace("projecthub_scrollbar")
@@ -25,6 +52,23 @@ M.ORG_ICON = config.options.icons.org
 M.MEMBER_ICON = config.options.icons.member
 M.FORK_ICON = config.options.icons.fork
 
+local VISIBILITY_TOKENS = {
+  pubblico = { type = "public", name = ICON_GLOBE .. " PUBBLICO", hl = "ProjectsHeaderPublic" },
+  public = { type = "public", name = ICON_GLOBE .. " PUBLIC", hl = "ProjectsHeaderPublic" },
+  privato = { type = "private", name = ICON_LOCK .. " PRIVATO", hl = "ProjectsHeaderPrivate" },
+  private = { type = "private", name = ICON_LOCK .. " PRIVATE", hl = "ProjectsHeaderPrivate" },
+  locale = { type = "local", name = ICON_FOLDER .. " LOCALE", hl = "ProjectsHeaderLocal" },
+  locali = { type = "local", name = ICON_FOLDER .. " LOCALI", hl = "ProjectsHeaderLocal" },
+  ["local"] = { type = "local", name = ICON_FOLDER .. " LOCAL", hl = "ProjectsHeaderLocal" },
+  locals = { type = "local", name = ICON_FOLDER .. " LOCALS", hl = "ProjectsHeaderLocal" },
+  untracked = { type = "local", name = ICON_FOLDER .. " UNTRACKED", hl = "ProjectsHeaderLocal" },
+  unversioned = { type = "local", name = ICON_FOLDER .. " UNVERSIONED", hl = "ProjectsHeaderLocal" },
+  nonversionato = { type = "local", name = ICON_FOLDER .. " NON VERSIONATO", hl = "ProjectsHeaderLocal" },
+  ["non-versionato"] = { type = "local", name = ICON_FOLDER .. " NON VERSIONATO", hl = "ProjectsHeaderLocal" },
+  nonversionati = { type = "local", name = ICON_FOLDER .. " NON VERSIONATI", hl = "ProjectsHeaderLocal" },
+  ["non-versionati"] = { type = "local", name = ICON_FOLDER .. " NON VERSIONATI", hl = "ProjectsHeaderLocal" },
+}
+
 -- Mappa di riconoscimento dei linguaggi per la ricerca (usa i badge ProjectsPill)
 local LANG_TOKENS = {
   kotlin = { name = "Kotlin", hl = "ProjectsPillKotlin" },
@@ -44,6 +88,18 @@ local LANG_TOKENS = {
   swift = { name = "Swift", hl = "ProjectsPillSwift" },
   html = { name = "HTML", hl = "ProjectsPillHTML" },
   css = { name = "CSS", hl = "ProjectsPillCSS" },
+  sql = { name = "SQL", hl = "ProjectsPillSQL" },
+  vue = { name = "Vue", hl = "ProjectsPillVue" },
+  svelte = { name = "Svelte", hl = "ProjectsPillSvelte" },
+  astro = { name = "Astro", hl = "ProjectsPillAstro" },
+  php = { name = "PHP", hl = "ProjectsPillPHP" },
+  ruby = { name = "Ruby", hl = "ProjectsPillRuby" },
+  rb = { name = "Ruby", hl = "ProjectsPillRuby" },
+  ["c#"] = { name = "C#", hl = "ProjectsPillCSharp" },
+  csharp = { name = "C#", hl = "ProjectsPillCSharp" },
+  cs = { name = "C#", hl = "ProjectsPillCSharp" },
+  dart = { name = "Dart", hl = "ProjectsPillDart" },
+  zig = { name = "Zig", hl = "ProjectsPillZig" },
   markdown = { name = "Markdown", hl = "ProjectsPillMarkdown" },
   md = { name = "Markdown", hl = "ProjectsPillMarkdown" },
   shell = { name = "Shell", hl = "ProjectsPillShell" },
@@ -137,6 +193,15 @@ local function set_hl()
     ProjectsLangSwift = { fg = "#F05138", bold = true, undercurl = false, sp = nil },
     ProjectsLangHTML = { fg = "#E34C26", bold = true, undercurl = false, sp = nil },
     ProjectsLangCSS = { fg = "#9B59B6", bold = true, undercurl = false, sp = nil },
+    ProjectsLangSQL = { fg = "#E38C00", bold = true, undercurl = false, sp = nil },
+    ProjectsLangVue = { fg = "#41B883", bold = true, undercurl = false, sp = nil },
+    ProjectsLangSvelte = { fg = "#FF3E00", bold = true, undercurl = false, sp = nil },
+    ProjectsLangAstro = { fg = "#FF5D01", bold = true, undercurl = false, sp = nil },
+    ProjectsLangPHP = { fg = "#777BB4", bold = true, undercurl = false, sp = nil },
+    ProjectsLangRuby = { fg = "#CC342D", bold = true, undercurl = false, sp = nil },
+    ProjectsLangCSharp = { fg = "#178600", bold = true, undercurl = false, sp = nil },
+    ProjectsLangDart = { fg = "#00B4AB", bold = true, undercurl = false, sp = nil },
+    ProjectsLangZig = { fg = "#EC915C", bold = true, undercurl = false, sp = nil },
     ProjectsLangMarkdown = { fg = "#61AFEF", bold = true, undercurl = false, sp = nil },
     ProjectsLangShell = { fg = "#2ECC71", bold = true, undercurl = false, sp = nil },
     ProjectsLangTrack = { fg = "#282C34" },
@@ -155,6 +220,15 @@ local function set_hl()
     ProjectsPillSwift = { fg = "#F05138", bg = "#38211E", bold = true, undercurl = false, sp = nil },
     ProjectsPillHTML = { fg = "#E34C26", bg = "#38221D", bold = true, undercurl = false, sp = nil },
     ProjectsPillCSS = { fg = "#9B59B6", bg = "#2B2038", bold = true, undercurl = false, sp = nil },
+    ProjectsPillSQL = { fg = "#E38C00", bg = "#33271A", bold = true, undercurl = false, sp = nil },
+    ProjectsPillVue = { fg = "#41B883", bg = "#1B3329", bold = true, undercurl = false, sp = nil },
+    ProjectsPillSvelte = { fg = "#FF3E00", bg = "#381F1A", bold = true, undercurl = false, sp = nil },
+    ProjectsPillAstro = { fg = "#FF5D01", bg = "#38221A", bold = true, undercurl = false, sp = nil },
+    ProjectsPillPHP = { fg = "#777BB4", bg = "#252638", bold = true, undercurl = false, sp = nil },
+    ProjectsPillRuby = { fg = "#CC342D", bg = "#381E1D", bold = true, undercurl = false, sp = nil },
+    ProjectsPillCSharp = { fg = "#178600", bg = "#1B331A", bold = true, undercurl = false, sp = nil },
+    ProjectsPillDart = { fg = "#00B4AB", bg = "#173133", bold = true, undercurl = false, sp = nil },
+    ProjectsPillZig = { fg = "#EC915C", bg = "#382B21", bold = true, undercurl = false, sp = nil },
     ProjectsPillMarkdown = { fg = "#61AFEF", bg = "#1F2B38", bold = true, undercurl = false, sp = nil },
     ProjectsPillShell = { fg = "#2ECC71", bg = "#1B3326", bold = true, undercurl = false, sp = nil },
   }
@@ -244,6 +318,104 @@ local function set_hl()
   end
 end
 
+local function clear_kitty_graphics()
+  pcall(vim.api.nvim_chan_send, vim.v.stderr, "\27_Ga=d,d=A;\27\\")
+end
+
+local function render_web_preview_in_box(st, p, pw)
+  local html_file = P.get_html_preview_file(p.path)
+  if not html_file then return end
+
+  if not (st.preview.win and vim.api.nvim_win_is_valid(st.preview.win)) then return end
+
+  local ph = vim.api.nvim_win_get_height(st.preview.win)
+  local electron_bin = vim.fn.expand("~/.local/share/terminal-browser/app/electron/terminal-browser.app/Contents/MacOS/terminal-browser")
+  local chafa_bin = vim.fn.executable("chafa") == 1 and "chafa"
+    or (vim.fn.executable("/opt/homebrew/bin/chafa") == 1 and "/opt/homebrew/bin/chafa" or nil)
+
+  if chafa_bin and vim.fn.executable(electron_bin) == 1 then
+    local img_path = "/tmp/ph_render_" .. vim.fn.sha256(html_file) .. ".png"
+    local script_path = "/tmp/ph_render.js"
+
+    if vim.fn.filereadable(img_path) == 0 then
+      local js_code = string.format([[
+const { app, BrowserWindow } = require('electron');
+const fs = require('fs');
+app.commandLine.appendSwitch('no-sandbox');
+app.commandLine.appendSwitch('disable-gpu');
+app.whenReady().then(async () => {
+  const win = new BrowserWindow({ width: 1200, height: 900, show: false, webPreferences: { offscreen: true } });
+  await win.loadFile('%s');
+  await win.webContents.insertCSS('::-webkit-scrollbar { display: none !important; } body { overflow: hidden !important; }');
+  await new Promise(r => setTimeout(r, 300));
+  const image = await win.webContents.capturePage();
+  fs.writeFileSync('%s', image.toPNG());
+  app.quit();
+});
+]], html_file, img_path)
+      vim.fn.writefile(vim.split(js_code, "\n"), script_path)
+      vim.fn.system({ electron_bin, script_path, html_file })
+    end
+
+    if vim.fn.filereadable(img_path) == 1 then
+      local win_pos = vim.api.nvim_win_get_position(st.preview.win)
+      local r = win_pos[1] + 2
+      local c = win_pos[2] + 2
+      local box_w = math.max(10, pw - 2)
+      local box_h = math.max(10, ph - 2)
+
+      local cmd_kitty = string.format("%s -f kitty --size=%dx%d %s", chafa_bin, box_w, box_h, vim.fn.shellescape(img_path))
+      local handle = io.popen(cmd_kitty)
+      if handle then
+        local kitty_output = handle:read("*a")
+        handle:close()
+
+        if kitty_output and vim.trim(kitty_output) ~= "" then
+          local term_buf = st.preview.buf
+          if not (term_buf and vim.api.nvim_buf_is_valid(term_buf)) then
+            term_buf = vim.api.nvim_create_buf(false, true)
+            st.preview.buf = term_buf
+          end
+          vim.bo[term_buf].modifiable = true
+          vim.bo[term_buf].readonly = false
+
+          local blank_lines = {}
+          for _ = 1, math.max(1, ph - 2) do blank_lines[#blank_lines + 1] = string.rep(" ", math.max(1, pw - 2)) end
+          vim.api.nvim_buf_set_lines(term_buf, 0, -1, false, blank_lines)
+          vim.bo[term_buf].modifiable = false
+          vim.bo[term_buf].readonly = true
+
+          vim.api.nvim_win_set_buf(st.preview.win, term_buf)
+          st.preview.shown = term_buf
+
+          local footer_preview = {
+            { " " .. i18n.t("btn_inspector") .. " ", "ProjectsLazyBtnLabel" },
+            { " s / w ", "ProjectsLazyBtnKey" },
+            { "  ", "NormalFloat" },
+            { " " .. i18n.t("btn_live") .. " ", "ProjectsLazyBtnLabel" },
+            { " W ", "ProjectsLazyBtnKey" },
+          }
+          pcall(vim.api.nvim_win_set_config, st.preview.win, {
+            title = { { " " .. ICON_GLOBE .. " " .. i18n.t("title_web_preview") .. " ", "ProjectsTitleSpecial" } },
+            title_pos = "right",
+            footer = footer_preview,
+            footer_pos = "center",
+          })
+
+          if st.preview and vim.api.nvim_win_is_valid(st.preview.sb_win) then
+            pcall(vim.api.nvim_win_close, st.preview.sb_win, true)
+          end
+
+          local move_cmd = string.format("\27[%d;%dH", r, c)
+          pcall(vim.api.nvim_chan_send, vim.v.stderr, move_cmd .. kitty_output)
+
+          return
+        end
+      end
+    end
+  end
+end
+
 local dw = vim.fn.strdisplaywidth
 
 local function fit(s, w)
@@ -256,11 +428,28 @@ local function fit(s, w)
   return s .. "…"
 end
 
+-- Traduce il codice stabile restituito da P.add_custom_extra() in un
+-- titolo + corpo del messaggio nella lingua attiva.
+local ADD_EXTRA_RESULT_KEYS = {
+  empty_path = { "err_empty_path_title", "err_empty_path_body" },
+  not_found = { "err_not_found_title", "err_not_found_body" },
+  not_directory = { "err_not_dir_title", "err_not_dir_body" },
+  already_registered = { "err_already_title", "err_already_body" },
+  write_error = { "err_write_title", "err_write_body" },
+  added = { "ok_added_title", "ok_added_body" },
+}
+
+local function add_extra_result_text(code, arg)
+  local keys = ADD_EXTRA_RESULT_KEYS[code]
+  if not keys then return code, "" end
+  return i18n.t(keys[1]), i18n.t(keys[2], arg)
+end
+
 local function get_author_pill_hl(author_name)
+  local clean = tostring(author_name or "user"):lower():gsub("[%s%-_%./\\]", "")
   local h = 0
-  author_name = tostring(author_name or "user")
-  for i = 1, #author_name do
-    h = h + string.byte(author_name, i)
+  for i = 1, #clean do
+    h = h + string.byte(clean, i)
   end
   local idx = (h % 6) + 1
   return "ProjectsAuthorPill_" .. idx
@@ -333,7 +522,7 @@ local function missing_card(p, w, sel)
     return fill_row(chunks)
   end
 
-  local badge = " " .. (p.type and p.type:upper() or "MANCANTE") .. " "
+  local badge = " " .. (p.type and p.type:upper() or i18n.t("missing_type"):upper()) .. " "
 
   -- Solo lo stile (bordo/sfondo rosso) + identita' del progetto qui.
   -- Le istruzioni su cosa fare (riconnetti/rimuovi) stanno nel pannello
@@ -351,7 +540,49 @@ local function missing_card(p, w, sel)
   return rows_out
 end
 
-local function card(p, w, sel)
+local function slice_chunks_by_char(chunks, offset, max_w)
+  local result = {}
+  local current_pos = 0
+  local accumulated_w = 0
+
+  for _, chunk in ipairs(chunks) do
+    local text = chunk[1]
+    local hl = chunk[2]
+    local num_chars = vim.fn.strchars(text)
+
+    for i = 0, num_chars - 1 do
+      local char_str = vim.fn.strcharpart(text, i, 1)
+      local char_w = dw(char_str)
+
+      if current_pos < offset then
+        current_pos = current_pos + char_w
+      else
+        if accumulated_w + char_w <= max_w then
+          if #result > 0 and result[#result][2] == hl then
+            result[#result][1] = result[#result][1] .. char_str
+          else
+            result[#result + 1] = { char_str, hl }
+          end
+          accumulated_w = accumulated_w + char_w
+        else
+          break
+        end
+      end
+    end
+
+    if accumulated_w >= max_w then
+      break
+    end
+  end
+
+  if accumulated_w < max_w then
+    result[#result + 1] = { string.rep(" ", max_w - accumulated_w), "ProjectsMeta" }
+  end
+
+  return result
+end
+
+local function card(p, w, sel, st)
   if p.is_missing then
     return missing_card(p, w, sel)
   end
@@ -371,7 +602,7 @@ local function card(p, w, sel)
 
   local ptype = p.type and (" " .. p.type .. " ") or ""
   local name = fit(p.name, iw - dw(ptype) - 2)
-  local desc = p.desc and fit(p.desc, iw) or "nessuna descrizione"
+  local desc = p.desc and fit(p.desc, iw) or i18n.t("no_description")
   local age = p.ago or ""
   local dir = fit(p.dir, iw - dw(age) - 2)
   local gl, gr = git_chunks(p.git)
@@ -397,19 +628,36 @@ local function card(p, w, sel)
       end
 
       for idx, lang in ipairs(p.languages) do
-        if idx <= 4 then
-          if idx > 1 then
-            legend_chunks[#legend_chunks + 1] = { "  " }
-          end
-          legend_chunks[#legend_chunks + 1] = { "● ", lang.hl }
-          legend_chunks[#legend_chunks + 1] = { lang.name .. " ", "ProjectsMeta" }
-          legend_chunks[#legend_chunks + 1] = { lang.pct .. "%", "ProjectsMeta" }
+        if idx > 1 then
+          legend_chunks[#legend_chunks + 1] = { "   " }
         end
+        legend_chunks[#legend_chunks + 1] = { "● ", lang.hl }
+        legend_chunks[#legend_chunks + 1] = { lang.name .. " ", "ProjectsMeta" }
+        legend_chunks[#legend_chunks + 1] = { lang.pct .. "%", "ProjectsMeta" }
       end
     end
   else
     bar_chunks = { { string.rep("━", iw), "ProjectsLangTrack" } }
     legend_chunks = { { "analizzando linguaggi...", "ProjectsMeta" } }
+  end
+
+  local rendered_legend = {}
+  if #legend_chunks > 0 then
+    if chunks_width(legend_chunks) > iw then
+      local loop_chunks = {}
+      vim.list_extend(loop_chunks, legend_chunks)
+      loop_chunks[#loop_chunks + 1] = { "   •   ", "ProjectsMeta" }
+      vim.list_extend(loop_chunks, legend_chunks)
+
+      local total_chars = 0
+      for _, c in ipairs(legend_chunks) do total_chars = total_chars + vim.fn.strchars(c[1]) end
+      total_chars = total_chars + 7
+
+      local offset = (st and st.marquee_offset or 0) % math.max(1, total_chars)
+      rendered_legend = slice_chunks_by_char(loop_chunks, offset, iw)
+    else
+      rendered_legend = slice_chunks_by_char(legend_chunks, 0, iw)
+    end
   end
 
   local rows_out = {
@@ -422,7 +670,7 @@ local function card(p, w, sel)
 
   if #bar_chunks > 0 then
     rows_out[#rows_out + 1] = row(bar_chunks, {})
-    rows_out[#rows_out + 1] = row(legend_chunks, {})
+    rows_out[#rows_out + 1] = row(rendered_legend, {})
   else
     rows_out[#rows_out + 1] = row({ { "", "ProjectsMeta" } }, {})
     rows_out[#rows_out + 1] = row({ { "", "ProjectsMeta" } }, {})
@@ -480,7 +728,7 @@ local function tree(root, max)
   end
 
   scan(root, "", 1)
-  if #out == 0 then out = { "(cartella vuota)" } end
+  if #out == 0 then out = { i18n.t("tree_empty") } end
   return out, hls
 end
 
@@ -511,7 +759,7 @@ local function highlight_input_languages(st)
   if line == "" then return end
 
   for start_pos, word in line:gmatch("()(%S+)") do
-    local info = LANG_TOKENS[word:lower()]
+    local info = LANG_TOKENS[word:lower()] or VISIBILITY_TOKENS[word:lower()]
     if info then
       local s_idx = start_pos - 1
       local e_idx = s_idx + #word
@@ -625,14 +873,14 @@ render_scrollbar = function(st)
   local h = vim.api.nvim_win_get_height(win)
 
   local max_content = 1
-  if st.dir_picker_mode then
-    max_content = #(st.dir_entries or {}) + 3
-  elseif st.pos then
+  if st.pos then
     for _, lnum in pairs(st.pos) do
-      if lnum + CARD_ROWS - 1 > max_content then
-        max_content = lnum + CARD_ROWS - 1
-      end
+      local b = lnum + CARD_ROWS - 1
+      if b > max_content then max_content = b end
     end
+  end
+  if max_content <= 1 then
+    max_content = vim.api.nvim_buf_line_count(st.list.buf)
   end
 
   local sbuf = st.list.sb_buf
@@ -675,6 +923,7 @@ end
 
 scroll_preview = function(st, lines)
   if not (st.preview and vim.api.nvim_win_is_valid(st.preview.win)) then return end
+  local need_more_commits = false
   vim.api.nvim_win_call(st.preview.win, function()
     local v = vim.fn.winsaveview()
     local buf = vim.api.nvim_win_get_buf(st.preview.win)
@@ -686,15 +935,39 @@ scroll_preview = function(st, lines)
     v.lnum = new_top
     v.leftcol = 0
     vim.fn.winrestview(v)
+
+    if lines > 0 and new_top + h >= total - 3 then
+      local p_item = st.items[st.sel]
+      local total_git_commits = (p_item and p_item.git and tonumber(p_item.git.commits)) or 0
+      local cur_lim = st.commit_limit or 100
+      if cur_lim < total_git_commits then
+        st.commit_limit = cur_lim + 100
+        need_more_commits = true
+      end
+    end
   end)
   render_preview_scrollbar(st)
+  if need_more_commits and st.inspector_mode then
+    render_inspector(st)
+  end
 end
 
 local function render_inspector(st)
   if not (st.preview and vim.api.nvim_win_is_valid(st.preview.win)) then return end
 
   local p = st.items[st.sel]
-  if not p then return end
+  if not p then
+    if st.preview.buf and vim.api.nvim_buf_is_valid(st.preview.buf) then
+      vim.bo[st.preview.buf].modifiable = true
+      vim.api.nvim_buf_set_lines(st.preview.buf, 0, -1, false, {})
+      vim.bo[st.preview.buf].modifiable = false
+    end
+    pcall(vim.api.nvim_win_set_config, st.preview.win, { title = "", footer = "" })
+    if st.preview.sb_win and vim.api.nvim_win_is_valid(st.preview.sb_win) then
+      pcall(vim.api.nvim_win_close, st.preview.sb_win, true)
+    end
+    return
+  end
 
   if not (st.preview.buf and vim.api.nvim_buf_is_valid(st.preview.buf)) then
     st.preview.buf = vim.api.nvim_create_buf(false, true)
@@ -718,7 +991,20 @@ local function render_inspector(st)
   end
 
   local note = P.get_note(p.path)
-  local commits = P.get_commit_details(p.path, 30)
+  local limit = st.commit_limit or 100
+  local commits, author_stats = P.get_commit_details(p.path, limit)
+  if #commits == 0 then
+    st.show_all_commits = false
+  end
+
+  local sel_idx = st.sel
+  if not P.has_gh_cache(p.path) then
+    P.async_load_github_meta(p.path, function()
+      if vim.api.nvim_win_is_valid(st.preview.win) and st.sel == sel_idx and st.inspector_mode then
+        render_preview(st)
+      end
+    end)
+  end
 
   local lines = {}
   local hls = {}
@@ -736,128 +1022,136 @@ local function render_inspector(st)
     return str
   end
 
-  -- Header Info with Top-Right GitHub Badges (Visibility, Owner, Stars, Forks)
-  local gh_meta = P.get_github_meta(p.path)
-  local title_pill = " " .. p.name .. " "
-  local header_left = "  " .. title_pill
+  if not st.show_all_commits then
+    -- Header Info with Top-Right GitHub Badges (Visibility, Owner, Stars, Forks)
+    local gh_meta = P.get_github_meta(p.path)
+    local title_pill = " " .. p.name .. " "
+    local header_left = "  " .. title_pill
 
-  local current_user = (config.options.me.owners and config.options.me.owners[1]) or ""
-  local show_owner_pill = false
-  local owner_pill_str = ""
+    local current_user = (config.options.me.owners and config.options.me.owners[1]) or ""
+    local show_owner_pill = false
+    local owner_pill_str = ""
 
-  local vis_text = ""
-  local vis_hl = "ProjectsHeaderLocal"
-  local star_text = ""
-  local fork_text = ""
+    local vis_text = ""
+    local vis_hl = "ProjectsHeaderLocal"
+    local star_text = ""
+    local fork_text = ""
 
-  if p.is_missing then
-    vis_text = "󰅖 SPOSTATO / ELIMINATO"
-    vis_hl = "ProjectsHeaderMissing"
-  elseif gh_meta then
-    if gh_meta.is_private then
-      vis_text = "󰌾 PRIVATO"
-      vis_hl = "ProjectsHeaderPrivate"
-    else
-      vis_text = "󰖟 PUBBLICO"
-      vis_hl = "ProjectsHeaderPublic"
+    if p.is_missing then
+      vis_text = ICON_ERROR .. " " .. i18n.t("header_moved")
+      vis_hl = "ProjectsHeaderMissing"
+    elseif gh_meta then
+      if gh_meta.is_private then
+        vis_text = ICON_LOCK .. " " .. i18n.t("header_private")
+        vis_hl = "ProjectsHeaderPrivate"
+      else
+        vis_text = ICON_GLOBE .. " " .. i18n.t("header_public")
+        vis_hl = "ProjectsHeaderPublic"
 
-      if (gh_meta.stars or 0) > 0 then
-        star_text = "  ★ " .. gh_meta.stars
-      end
-      if (gh_meta.forks or 0) > 0 then
-        fork_text = "  " .. M.FORK_ICON .. gh_meta.forks
-      end
-    end
-
-    if gh_meta.owner and gh_meta.owner:lower() ~= current_user:lower() then
-      show_owner_pill = true
-      owner_pill_str = " [" .. M.ORG_ICON .. gh_meta.owner .. "]"
-    end
-  else
-    vis_text = "󰌾 LOCALE"
-    vis_hl = "ProjectsHeaderLocal"
-  end
-
-  local right_parts = {}
-  right_parts[#right_parts + 1] = { txt = vis_text, hl = vis_hl }
-  if show_owner_pill then
-    local o_hl = get_author_pill_hl(gh_meta.owner)
-    right_parts[#right_parts + 1] = { txt = " " .. owner_pill_str, hl = o_hl }
-  end
-  if star_text ~= "" then
-    right_parts[#right_parts + 1] = { txt = star_text, hl = "ProjectsHeaderStars" }
-  end
-  if fork_text ~= "" then
-    right_parts[#right_parts + 1] = { txt = fork_text, hl = "ProjectsHeaderForks" }
-  end
-
-  local header_right = ""
-  for _, part in ipairs(right_parts) do
-    header_right = header_right .. part.txt
-  end
-  header_right = header_right .. "  "
-
-  local space_fill = math.max(1, pw - vim.api.nvim_strwidth(header_left) - vim.api.nvim_strwidth(header_right))
-  local full_header = header_left .. string.rep(" ", space_fill) .. header_right
-
-  add("")
-  lines[#lines + 1] = full_header
-  local h_row = #lines - 1
-  hls[#hls + 1] = { h_row, 2, 2 + #title_pill, "ProjectsProjectTitle" }
-
-  local curr_col = #full_header - #header_right
-  for _, part in ipairs(right_parts) do
-    local p_len = #part.txt
-    hls[#hls + 1] = { h_row, curr_col, curr_col + p_len, part.hl }
-    curr_col = curr_col + p_len
-  end
-
-  add("   " .. p.path, "ProjectsDir")
-
-  add("")
-  add("  \u{e66a} PANORAMICA", "ProjectsTitleSpecial")
-
-  if p.is_missing then
-    add("   ┌─ 󰅖 CARTELLA SPOSTATA O ELIMINATA ───────────────────┐", "ProjectsHeaderMissing")
-    add("   │                                                       │", "ProjectsHeaderMissing")
-    add("   │  La cartella di questo progetto non è più presente    │", "ProjectsHeaderMissing")
-    add("   │  nella posizione originale memorizzata:               │", "ProjectsDesc")
-    add("   │  " .. fit(p.path, pw - 10) .. string.rep(" ", math.max(0, pw - 10 - dw(fit(p.path, pw - 10)))) .. " │", "ProjectsMeta")
-    add("   │                                                       │", "ProjectsHeaderMissing")
-    add("   │  AZIONI CONSIGLIATE:                                  │", "ProjectsName")
-    add("   │  • Premi r per riconnettere la nuova posizione        │", "ProjectsGitBranch")
-    add("   │  • Premi d per rimuovere questo tracciamento           │", "ProjectsGitBranch")
-    add("   └───────────────────────────────────────────────────────┘", "ProjectsHeaderMissing")
-  else
-    if p.loc_lines then
-      add("   󰈙 Righe di Codice:    " .. fmt_num(p.loc_lines) .. " righe totali", "ProjectsGitBranch")
-      add("   󰉏 File Sorgente:      " .. fmt_num(p.loc_files) .. " file di progetto", "ProjectsGitBranch")
-    else
-      add("   󰈙 Righe di Codice:    (calcolo in corso...)", "ProjectsDesc")
-      add("   󰉏 File Sorgente:      (calcolo in corso...)", "ProjectsDesc")
-    end
-
-    local sel_idx = st.sel
-    local limit = st.show_all_commits and 100 or 50
-    local commits, author_stats = P.get_commit_details(p.path, limit)
-
-    if not P.has_gh_cache(p.path) then
-      P.async_load_github_meta(p.path, function()
-        if vim.api.nvim_win_is_valid(st.preview.win) and st.sel == sel_idx and st.inspector_mode then
-          render_preview(st)
+        if (gh_meta.stars or 0) > 0 then
+          star_text = "  ★ " .. gh_meta.stars
         end
-      end)
+        if (gh_meta.forks or 0) > 0 then
+          fork_text = "  " .. M.FORK_ICON .. gh_meta.forks
+        end
+      end
+
+      if gh_meta.owner and gh_meta.owner:lower() ~= current_user:lower() then
+        show_owner_pill = true
+        owner_pill_str = " " .. M.ORG_ICON .. gh_meta.owner
+      end
+    else
+      vis_text = ICON_FOLDER .. " " .. i18n.t("header_local")
+      vis_hl = "ProjectsHeaderLocal"
     end
 
-    local branch_str = (p.git and p.git.branch) and ("[" .. tostring(p.git.branch) .. "]") or "[main]"
-    local git_num_commits = (p.git and p.git.commits) and tostring(p.git.commits) or "0"
-    add("   󰊢 Cronologia Git:      " .. (p.git and (git_num_commits .. " commit " .. branch_str) or "non tracciato"), "ProjectsGitStaged")
-    add("   󰃭 Ultima Modifica:     " .. tostring(p.ago or "sconosciuta"), "ProjectsMeta")
+    local right_parts = {}
+    right_parts[#right_parts + 1] = { txt = vis_text, hl = vis_hl }
+    if show_owner_pill then
+      local o_hl = get_author_pill_hl(gh_meta.owner)
+      right_parts[#right_parts + 1] = { txt = " " .. owner_pill_str, hl = o_hl }
+    end
+    if star_text ~= "" then
+      right_parts[#right_parts + 1] = { txt = star_text, hl = "ProjectsHeaderStars" }
+    end
+    if fork_text ~= "" then
+      right_parts[#right_parts + 1] = { txt = fork_text, hl = "ProjectsHeaderForks" }
+    end
+
+    local header_right = ""
+    for _, part in ipairs(right_parts) do
+      header_right = header_right .. part.txt
+    end
+    header_right = header_right .. "  "
+
+    local space_fill = math.max(1, pw - vim.api.nvim_strwidth(header_left) - vim.api.nvim_strwidth(header_right))
+    local full_header = header_left .. string.rep(" ", space_fill) .. header_right
+
+    add("")
+    lines[#lines + 1] = full_header
+    local h_row = #lines - 1
+    hls[#hls + 1] = { h_row, 2, 2 + #title_pill, "ProjectsProjectTitle" }
+
+    local curr_col = #full_header - #header_right
+    for _, part in ipairs(right_parts) do
+      local p_len = #part.txt
+      hls[#hls + 1] = { h_row, curr_col, curr_col + p_len, part.hl }
+      curr_col = curr_col + p_len
+    end
+
+    add("   " .. p.path, "ProjectsDir")
+    if gh_meta and (gh_meta.parent or gh_meta.is_fork) then
+      local parent_str = gh_meta.parent and i18n.t("fork_of", gh_meta.parent) or i18n.t("fork_of_original")
+      add("   " .. ICON_RELOCATE .. " " .. parent_str, "ProjectsGitBranch")
+    end
+
+    add("")
+    add("  " .. ICON_OVERVIEW .. " " .. i18n.t("overview"), "ProjectsTitleSpecial")
+
+    if p.is_missing then
+      local box_title = i18n.t("missing_box_title")
+      local box_rows = {
+        { text = i18n.t("missing_box_line1"), hl = "ProjectsHeaderMissing" },
+        { text = i18n.t("missing_box_line2"), hl = "ProjectsDesc" },
+        { text = fit(p.path, pw - 10), hl = "ProjectsMeta" },
+        { text = "", hl = "ProjectsHeaderMissing" },
+        { text = i18n.t("missing_box_actions"), hl = "ProjectsName" },
+        { text = i18n.t("missing_box_reconnect"), hl = "ProjectsGitBranch" },
+        { text = i18n.t("missing_box_untrack"), hl = "ProjectsGitBranch" },
+      }
+      local inner_w = dw(box_title) + 2
+      for _, row in ipairs(box_rows) do
+        inner_w = math.max(inner_w, dw(row.text))
+      end
+      inner_w = math.min(inner_w, math.max(20, pw - 10))
+
+      add("   ┌─ " .. ICON_ERROR .. " " .. box_title .. " " .. string.rep("─", math.max(0, inner_w - dw(box_title) - 1)) .. "┐", "ProjectsHeaderMissing")
+      add("   │  " .. string.rep(" ", inner_w) .. " │", "ProjectsHeaderMissing")
+      for _, row in ipairs(box_rows) do
+        local txt = fit(row.text, inner_w)
+        add("   │  " .. txt .. string.rep(" ", math.max(0, inner_w - dw(txt))) .. " │", row.hl)
+      end
+      add("   └" .. string.rep("─", inner_w + 4) .. "┘", "ProjectsHeaderMissing")
+    else
+      if p.loc_lines then
+        add("   " .. ICON_DOC .. " " .. i18n.t("loc_lines", fmt_num(p.loc_lines)), "ProjectsGitBranch")
+        add("   " .. ICON_FOLDER .. " " .. i18n.t("loc_files", fmt_num(p.loc_files)), "ProjectsGitBranch")
+      else
+        add("   " .. ICON_DOC .. " " .. i18n.t("loc_calculating_lines"), "ProjectsDesc")
+        add("   " .. ICON_FOLDER .. " " .. i18n.t("loc_calculating_files"), "ProjectsDesc")
+      end
+
+      local branch_str = (p.git and p.git.branch) and ("[" .. tostring(p.git.branch) .. "]") or "[main]"
+      local git_num_commits = (p.git and p.git.commits) and tostring(p.git.commits) or "0"
+      local git_history_text = p.git and i18n.t("git_history_commits_branch", git_num_commits, branch_str) or i18n.t("not_tracked")
+      add("   " .. ICON_GIT .. " " .. i18n.t("git_history", git_history_text), "ProjectsGitStaged")
+      add("   " .. ICON_CLOCK .. " " .. i18n.t("last_modified", tostring(p.ago or i18n.t("unknown"))), "ProjectsMeta")
+    end
   end
 
-  if author_stats and #author_stats > 1 then
+    if author_stats and #author_stats > 1 then
     add("")
-    add(string.format("  󰓓 TEAM & COLLABORATORI  (%d sviluppatori)", #author_stats), "ProjectsName")
+    add("  \u{f0849} " .. i18n.t("team", #author_stats), "ProjectsName")
 
     local tot_c = 0
     for _, ast in ipairs(author_stats) do
@@ -873,9 +1167,9 @@ local function render_inspector(st)
         local c_num = ast.count or 0
         local pct = math.floor((c_num / tot_c) * 100 + 0.5)
         local role_icon = ast.is_owner and M.OWNER_ICON or M.MEMBER_ICON
-        local pill_str = "[" .. role_icon .. a_name .. "]"
+        local pill_str = role_icon .. a_name
         local indent = "   "
-        local stat_str = string.format("%d commit (%d%%)", c_num, pct)
+        local stat_str = i18n.t("commit_stat", c_num, pct)
 
         local line_left = indent .. pill_str .. "  "
         local fill_w = math.max(1, pw - 6 - vim.api.nvim_strwidth(line_left) - vim.api.nvim_strwidth(stat_str))
@@ -890,17 +1184,18 @@ local function render_inspector(st)
         hls[#hls + 1] = { r_idx, p_start, p_end, a_hl }
 
         local s_start = #full_line - #stat_str
-        hls[#hls + 1] = { r_idx, s_start, #full_line, "ProjectsGitStaged" }
+        hls[#hls + 1] = { r_idx, s_start, #full_line, "ProjectsMeta" }
       end
     end
 
     if not st.show_all_commits and #author_stats > 3 then
-      local a_more = string.format("   ... altri %d sviluppatori (Premi c per la lista completa)", #author_stats - 3)
+      local a_more = "   " .. i18n.t("team_more", #author_stats - 3)
       add(a_more, "ProjectsMeta")
       local l_idx = #lines - 1
-      local c_pos = a_more:find("Premi c")
+      local c_marker = i18n.t("press_c")
+      local c_pos = a_more:find(c_marker, 1, true)
       if c_pos then
-        hls[#hls + 1] = { l_idx, c_pos + 6, c_pos + 7, "ProjectsKeyText" }
+        hls[#hls + 1] = { l_idx, c_pos + #c_marker - 1, c_pos + #c_marker, "ProjectsKeyText" }
       end
     end
   end
@@ -930,7 +1225,7 @@ local function render_inspector(st)
     local date_str = tostring(c.age or "")
     local author_name = tostring(c.author or "")
     local role_icon = c.is_owner and M.OWNER_ICON or M.MEMBER_ICON
-    local author_pill = (c.show_author and author_name ~= "") and (" [" .. role_icon .. author_name .. "] ") or ""
+    local author_pill = (c.show_author and author_name ~= "") and (" " .. role_icon .. author_name .. " ") or ""
     local gap = (#author_pill > 0) and "  " or ""
     local right_block = date_str .. gap .. author_pill
 
@@ -986,17 +1281,23 @@ local function render_inspector(st)
 
   add("")
   if st.show_all_commits then
-    add("  󰋚 CRONOLOGIA COMMIT GIT COMPLETA  (" .. #commits .. " commit totali - Premi 'c' per comprimere)", "ProjectsName")
+    local total_git_commits = (p.git and tonumber(p.git.commits)) or #commits
+    if total_git_commits > #commits then
+      local c_title = string.format("%s (%d di %d commit caricati - Scorri per caricarne altri)", i18n.t("title_commits"), #commits, total_git_commits)
+      add("  " .. ICON_GIT .. " " .. c_title, "ProjectsTitleSpecial")
+    else
+      add("  " .. ICON_HISTORY .. " " .. i18n.t("commits_full", #commits), "ProjectsName")
+    end
 
     if #commits > 0 then
       for _, c in ipairs(commits) do
         add_commit_row(c, branch_str, pw - 4)
       end
     else
-      add("   (nessun commit git nel repository)", "ProjectsDesc")
+      add("   " .. i18n.t("commits_none"), "ProjectsDesc")
     end
   else
-    add("  󰋚 CRONOLOGIA COMMIT GIT  (I 5 commit più recenti)", "ProjectsName")
+    add("  " .. ICON_HISTORY .. " " .. i18n.t("commits_recent"), "ProjectsName")
 
     local visible_commits = math.min(5, #commits)
     if visible_commits > 0 then
@@ -1005,22 +1306,23 @@ local function render_inspector(st)
       end
 
       if #commits > 5 then
-        local c_more = string.format("   ... altri %d commit (Premi c per la cronologia completa)", #commits - 5)
+        local c_more = "   " .. i18n.t("commits_more", #commits - 5)
         add(c_more, "ProjectsMeta")
         local l_idx = #lines - 1
-        local c_pos = c_more:find("Premi c")
+        local c_marker = i18n.t("press_c")
+        local c_pos = c_more:find(c_marker, 1, true)
         if c_pos then
-          hls[#hls + 1] = { l_idx, c_pos + 6, c_pos + 7, "ProjectsKeyText" }
+          hls[#hls + 1] = { l_idx, c_pos + #c_marker - 1, c_pos + #c_marker, "ProjectsKeyText" }
         end
       end
     else
-      add("   (nessun commit git nel repository)", "ProjectsDesc")
+      add("   " .. i18n.t("commits_none"), "ProjectsDesc")
     end
 
     -- Boxed Post-It Card in Bottom 1/3
     add("")
     local max_box_dw = pw - 4
-    local top_head = "  ┌─ 󰠮 NOTE & APPUNTI "
+    local top_head = "  ┌─ " .. ICON_NOTE .. " " .. i18n.t("notes_title") .. " "
     local top_head_dw = vim.api.nvim_strwidth(top_head)
     local top_fill = math.max(0, max_box_dw - top_head_dw - 1)
     local top_border = top_head .. string.rep("─", top_fill) .. "┐"
@@ -1062,10 +1364,11 @@ local function render_inspector(st)
       local s_start = #line_str - #suffix
       hls[#hls + 1] = { r_idx, s_start, #line_str, "ProjectsName" }
 
-      if txt:find("Premi n") then
-        local k_start = line_str:find("Premi n")
+      local n_marker = i18n.t("press_n")
+      if txt:find(n_marker, 1, true) then
+        local k_start = line_str:find(n_marker, 1, true)
         if k_start then
-          hls[#hls + 1] = { r_idx, k_start + 6, k_start + 7, "ProjectsKeyText" }
+          hls[#hls + 1] = { r_idx, k_start + #n_marker - 1, k_start + #n_marker, "ProjectsKeyText" }
         end
       end
     end
@@ -1078,10 +1381,10 @@ local function render_inspector(st)
       note_lines = wrap_text(vim.trim(note), max_txt_w)
     else
       note_lines = {
-        "󰠮 Nessuna nota memorizzata per questo progetto.",
-        "Gli appunti sono locali e non occupano spazio nel repository.",
+        ICON_NOTE .. " " .. i18n.t("notes_empty_1"),
+        i18n.t("notes_empty_2"),
         "",
-        "Premi n per aggiungere un appunto",
+        i18n.t("notes_hint"),
       }
     end
 
@@ -1108,7 +1411,7 @@ local function render_inspector(st)
       local c_cnt = #clean_n
       local w_cnt = 0
       for _ in clean_n:gmatch("%S+") do w_cnt = w_cnt + 1 end
-      local stats_str = w_cnt .. " parole  •  " .. c_cnt .. " caratteri"
+      local stats_str = i18n.t("notes_stats", w_cnt, c_cnt)
       add_box_row(stats_str, "ProjectsMeta", true)
     end
 
@@ -1133,42 +1436,85 @@ local function render_inspector(st)
   vim.api.nvim_win_set_buf(st.preview.win, buf)
   st.preview.shown = buf
 
+  if not st.commit_scroll_autocmd then
+    st.commit_scroll_autocmd = true
+    vim.api.nvim_create_autocmd({ "CursorMoved", "CursorMovedI" }, {
+      group = vim.api.nvim_create_augroup("ProjectHubCommitScroll", { clear = true }),
+      callback = function()
+        if st.inspector_mode and vim.api.nvim_win_is_valid(st.preview.win) then
+          pcall(function()
+            local p_item = st.items[st.sel]
+            if p_item then
+              local vista = vim.api.nvim_win_call(st.preview.win, vim.fn.winsaveview)
+              local topline = vista.topline or 1
+              local h = vim.api.nvim_win_get_height(st.preview.win)
+              local cur = vim.api.nvim_win_get_cursor(st.preview.win)
+              local buf_len = vim.api.nvim_buf_line_count(st.preview.buf)
+              local total_git_commits = (p_item.git and tonumber(p_item.git.commits)) or 0
+              local current_limit = st.commit_limit or 100
+              local near_bottom = (topline + h >= buf_len - 5) or (cur[1] >= math.max(1, buf_len - 12))
+              if near_bottom and current_limit < total_git_commits then
+                st.commit_limit = current_limit + 100
+                render_inspector(st)
+              end
+            end
+          end)
+        end
+      end,
+    })
+  end
+
   local gh_url = P.get_github_url(p.path)
   local has_git = p.git and not p.git.none
+  local html_file = P.get_html_preview_file(p.path)
+  local readme = P.readme_path(p.path)
 
-  local footer_preview = {
-    { " Note ", "ProjectsLazyBtnLabel" },
-    { " n ", "ProjectsLazyBtnKey" },
-  }
+  local footer_preview = {}
+  if not st.show_all_commits then
+    footer_preview[#footer_preview + 1] = { " " .. i18n.t("btn_note") .. " ", "ProjectsLazyBtnLabel" }
+    footer_preview[#footer_preview + 1] = { " n ", "ProjectsLazyBtnKey" }
+  end
 
   if has_git then
-    footer_preview[#footer_preview + 1] = { "  ", "NormalFloat" }
-    footer_preview[#footer_preview + 1] = { " Commit ", "ProjectsLazyBtnLabel" }
+    if #footer_preview > 0 then
+      footer_preview[#footer_preview + 1] = { "  ", "NormalFloat" }
+    end
+    footer_preview[#footer_preview + 1] = { " " .. i18n.t("btn_commit") .. " ", "ProjectsLazyBtnLabel" }
     footer_preview[#footer_preview + 1] = { " c ", "ProjectsLazyBtnKey" }
   end
 
   footer_preview[#footer_preview + 1] = { "  ", "NormalFloat" }
-  footer_preview[#footer_preview + 1] = { " README ", "ProjectsLazyBtnLabel" }
+  if readme then
+    footer_preview[#footer_preview + 1] = { " " .. i18n.t("btn_readme") .. " ", "ProjectsLazyBtnLabel" }
+  else
+    footer_preview[#footer_preview + 1] = { " " .. i18n.t("btn_tree") .. " ", "ProjectsLazyBtnLabel" }
+  end
   footer_preview[#footer_preview + 1] = { " s ", "ProjectsLazyBtnKey" }
+
+
+
+  if html_file then
+    footer_preview[#footer_preview + 1] = { "  ", "NormalFloat" }
+    footer_preview[#footer_preview + 1] = { " " .. i18n.t("btn_web_preview") .. " ", "ProjectsLazyBtnLabel" }
+    footer_preview[#footer_preview + 1] = { " w ", "ProjectsLazyBtnKey" }
+  end
 
   if gh_url and gh_url ~= "" then
     footer_preview[#footer_preview + 1] = { "  ", "NormalFloat" }
-    footer_preview[#footer_preview + 1] = { " 󰊤 GitHub ", "ProjectsLazyBtnLabel" }
+    footer_preview[#footer_preview + 1] = { " " .. i18n.t("btn_github") .. " ", "ProjectsLazyBtnLabel" }
     footer_preview[#footer_preview + 1] = { " g ", "ProjectsLazyBtnKey" }
   end
 
   if p.is_missing then
     footer_preview[#footer_preview + 1] = { "  ", "NormalFloat" }
-    footer_preview[#footer_preview + 1] = { " Riconnetti ", "ProjectsLazyBtnLabel" }
+    footer_preview[#footer_preview + 1] = { " " .. i18n.t("btn_reconnect") .. " ", "ProjectsLazyBtnLabel" }
     footer_preview[#footer_preview + 1] = { " r ", "ProjectsLazyBtnKey" }
   end
 
-  footer_preview[#footer_preview + 1] = { "  ", "NormalFloat" }
-  footer_preview[#footer_preview + 1] = { " 󰩹 Rimuovi ", "ProjectsLazyBtnLabel" }
-  footer_preview[#footer_preview + 1] = { " d ", "ProjectsLazyBtnKey" }
+
 
   pcall(vim.api.nvim_win_set_config, st.preview.win, {
-    title = { { " \u{e66a} " .. (st.show_all_commits and "cronologia commit" or "informazioni") .. " ", "ProjectsTitleSpecial" } },
+    title = { { " " .. ICON_OVERVIEW .. " " .. (st.show_all_commits and i18n.t("title_commits") or i18n.t("title_info")) .. " ", "ProjectsTitleSpecial" } },
     title_pos = "right",
     footer = footer_preview,
     footer_pos = "center",
@@ -1201,12 +1547,12 @@ render_preview = function(st)
     add("")
     local relocate_p = st.dir_picker_relocate
     if relocate_p then
-      add("  󰋜 RICONNESSIONE PROGETTO: " .. relocate_p.name, "ProjectsTitleSpecial")
-      add("   Vecchio percorso:  " .. relocate_p.path, "ProjectsMissingPathPlain")
-      add("   Nuovo percorso:    " .. target_path, "ProjectsDir")
+      add("  " .. ICON_FOLDER_INSPECT .. " " .. i18n.t("relocate_title", relocate_p.name), "ProjectsTitleSpecial")
+      add("   " .. i18n.t("relocate_old_path", relocate_p.path), "ProjectsMissingPathPlain")
+      add("   " .. i18n.t("relocate_new_path", target_path), "ProjectsDir")
     else
-      add("  󰋜 ISPETTORE CARTELLA", "ProjectsTitleSpecial")
-      add("   Percorso: " .. target_path, "ProjectsDir")
+      add("  " .. ICON_FOLDER_INSPECT .. " " .. i18n.t("dirpicker_title"), "ProjectsTitleSpecial")
+      add("   " .. i18n.t("dirpicker_path", target_path), "ProjectsDir")
     end
     add("")
 
@@ -1223,13 +1569,13 @@ render_preview = function(st)
     end
 
     local sel_name = (sel_entry and sel_entry.type == "dir") and sel_entry.name or vim.fn.fnamemodify(target_path, ":t")
-    if not sel_name or sel_name == "" or sel_name == "/" then sel_name = "cartella" end
+    if not sel_name or sel_name == "" or sel_name == "/" then sel_name = i18n.t("generic_folder") end
 
     local pw = vim.api.nvim_win_is_valid(st.preview.win) and vim.api.nvim_win_get_width(st.preview.win) or 50
     local ph = vim.api.nvim_win_is_valid(st.preview.win) and vim.api.nvim_win_get_height(st.preview.win) or 20
 
-    add("   󰉏 Sotto-cartelle:  " .. fmt_num(sub_dirs_cnt) .. " cartelle", "ProjectsGitBranch")
-    add("   󰈙 File Contenuti:  " .. fmt_num(files_cnt) .. " file", "ProjectsGitBranch")
+    add("   " .. ICON_FOLDER .. " " .. i18n.t("dirpicker_subdirs", fmt_num(sub_dirs_cnt)), "ProjectsGitBranch")
+    add("   " .. ICON_DOC .. " " .. i18n.t("dirpicker_files", fmt_num(files_cnt)), "ProjectsGitBranch")
     -- Vertical centering for Callout Box inside preview panel
     local cur_cnt = #lines
     local top_pad_lines = math.max(2, math.floor((ph - cur_cnt - 3) / 2))
@@ -1239,11 +1585,11 @@ render_preview = function(st)
 
     local raw_inner
     if is_already then
-      raw_inner = "󰄬 '" .. sel_name .. "' È GIÀ UN PROGETTO REGISTRATO"
+      raw_inner = ICON_SUCCESS .. " " .. i18n.t("dirpicker_already", sel_name)
     elseif relocate_p then
-      raw_inner = "󰏔 PREMI  a  PER RICONNETTERE '" .. relocate_p.name .. "' QUI"
+      raw_inner = ICON_ADD .. " " .. i18n.t("dirpicker_reconnect", relocate_p.name)
     else
-      raw_inner = "󰏔 PREMI  a  PER AGGIUNGERE '" .. sel_name .. "' COME PROGETTO"
+      raw_inner = ICON_ADD .. " " .. i18n.t("dirpicker_add", sel_name)
     end
     local raw_dw = dw(raw_inner)
     local box_w = math.max(44, math.min(pw - 6, raw_dw + 4))
@@ -1287,11 +1633,7 @@ render_preview = function(st)
       pcall(vim.api.nvim_buf_set_extmark, buf, ns, h[1], h[2], { end_col = h[3], hl_group = h[4] })
     end
     vim.api.nvim_win_set_buf(st.preview.win, buf)
-    pcall(vim.api.nvim_win_set_config, st.preview.win, { title = "" })
-    return
-  end
-  if st.inspector_mode then
-    render_inspector(st)
+    pcall(vim.api.nvim_win_set_config, st.preview.win, { title = "", footer = "" })
     return
   end
   if #st.items == 0 then
@@ -1308,7 +1650,7 @@ render_preview = function(st)
     local p_lines = {}
     local p_hls = {}
 
-    local art = {
+    local art_it = {
       " █████╗ ███╗   ██╗████████╗███████╗██████╗ ██████╗ ██╗███╗   ███╗ █████╗ ",
       "██╔══██╗████╗  ██║╚══██╔══╝██╔════╝██╔══██╗██╔══██╗██║████╗ ████║██╔══██╗",
       "███████║██╔██╗ ██║   ██║   █████╗  ██████╔╝██████╔╝██║██╔████╔██║███████║",
@@ -1331,34 +1673,69 @@ render_preview = function(st)
       "╚═════╝ ╚═╝╚══════╝╚═╝      ╚═════╝ ╚═╝  ╚═══╝╚═╝╚═════╝ ╚═╝╚══════╝╚══════╝",
     }
 
-    local top_pad = math.max(1, math.floor((ph - #art) / 2))
-    local p_lines = {}
-    local p_hls = {}
+    local art_en = {
+      "██████╗ ██████╗ ███████╗██╗   ██╗██╗███████╗██╗    ██╗",
+      "██╔══██╗██╔══██╗██╔════╝██║   ██║██║██╔════╝██║    ██║",
+      "██████╔╝██████╔╝█████╗  ██║   ██║██║█████╗  ██║ █╗ ██║",
+      "██╔═══╝ ██╔══██╗██╔══╝  ╚██╗ ██╔╝██║██╔══╝  ██║███╗██║",
+      "██║     ██║  ██║███████╗ ╚████╔╝ ██║███████╗╚███╔███╔╝",
+      "╚═╝     ╚═╝  ╚═╝╚══════╝  ╚═══╝  ╚═╝╚══════╝ ╚══╝╚══╝ ",
+      "",
+      "███╗   ██╗ ██████╗ ████████╗",
+      "████╗  ██║██╔═══██╗╚══██╔══╝",
+      "██╔██╗ ██║██║   ██║   ██║   ",
+      "██║╚██╗██║██║   ██║   ██║   ",
+      "██║ ╚████║╚██████╔╝   ██║   ",
+      "╚═╝  ╚═══╝ ╚═════╝    ╚═╝   ",
+      "",
+      " █████╗ ██╗   ██╗ █████╗ ██╗██╗      █████╗ ██████╗ ██╗     ███████╗",
+      "██╔══██╗██║   ██║██╔══██╗██║██║     ██╔══██╗██╔══██╗██║     ██╔════╝",
+      "███████║██║   ██║███████║██║██║     ███████║██████╔╝██║     █████╗  ",
+      "██╔══██║╚██╗ ██╔╝██╔══██║██║██║     ██╔══██║██╔══██╗██║     ██╔══╝  ",
+      "██║  ██║ ╚████╔╝ ██║  ██║██║███████╗██║  ██║██████╔╝███████╗███████╗",
+      "╚═╝  ╚═╝  ╚═══╝  ╚═╝  ╚═╝╚═╝╚══════╝╚═╝  ╚═╝╚═════╝ ╚══════╝╚══════╝",
+    }
 
+    local art = (i18n.get_lang() == "it") and art_it or art_en
+
+    local top_pad = math.max(1, math.floor((ph - #art) / 2))
     for _ = 1, top_pad do p_lines[#p_lines + 1] = "" end
 
-    for _, art_line in ipairs(art) do
-      local pad_left = string.rep(" ", math.max(0, math.floor((pw - dw(art_line)) / 2)))
-      p_lines[#p_lines + 1] = pad_left .. art_line
-      local line_idx = #p_lines - 1
-      p_hls[#p_hls + 1] = { line_idx, #pad_left, #pad_left + #art_line, "ProjectsDesc" }
+    for _, a in ipairs(art) do
+      local pad = string.rep(" ", math.max(0, math.floor((pw - dw(a)) / 2)))
+      p_lines[#p_lines + 1] = pad .. a
+      p_hls[#p_hls + 1] = { #p_lines - 1, #pad, #pad + #a, "ProjectsName" }
     end
 
     vim.api.nvim_buf_set_lines(buf, 0, -1, false, p_lines)
     vim.bo[buf].modifiable = false
     vim.bo[buf].readonly = true
     vim.api.nvim_buf_clear_namespace(buf, ns, 0, -1)
+
     for _, h in ipairs(p_hls) do
       pcall(vim.api.nvim_buf_set_extmark, buf, ns, h[1], h[2], { end_col = h[3], hl_group = h[4] })
     end
+
     vim.api.nvim_win_set_buf(st.preview.win, buf)
-    pcall(vim.api.nvim_win_set_config, st.preview.win, { title = "", title_pos = "right" })
-    render_preview_scrollbar(st)
+    st.preview.shown = buf
+    pcall(vim.api.nvim_win_set_config, st.preview.win, { title = "", footer = "" })
+    if st.preview.sb_win and vim.api.nvim_win_is_valid(st.preview.sb_win) then
+      pcall(vim.api.nvim_win_close, st.preview.sb_win, true)
+    end
     return
   end
 
+
   local p = st.items[st.sel]
   if not (p and vim.api.nvim_win_is_valid(st.preview.win)) then return end
+
+  if st.web_preview_mode then
+    local html_file = P.get_html_preview_file(p.path)
+    if html_file then
+      render_web_preview_in_box(st, p, vim.api.nvim_win_get_width(st.preview.win))
+      return
+    end
+  end
 
   if p.is_missing then
     if not vim.api.nvim_buf_is_valid(st.preview.buf) then
@@ -1400,14 +1777,11 @@ render_preview = function(st)
       centered_chunks({ { fit(text, text_w), hl } })
     end
 
-    local desc_lines = wrap_text(
-      "La cartella di questo progetto non è più presente nella posizione originale memorizzata su disco.",
-      text_w
-    )
+    local desc_lines = wrap_text(i18n.t("missing_explanation"), text_w)
     local path_lines = wrap_text(p.path, text_w)
 
-    local key_r = { { " r ", "ProjectsMissingKeyBadge" }, { " Riconnetti", "ProjectsMissingBtnLabel" } }
-    local key_d = { { " d ", "ProjectsMissingKeyBadge" }, { " Rimuovi traccia", "ProjectsMissingBtnLabel" } }
+    local key_r = { { " r ", "ProjectsMissingKeyBadge" }, { " " .. i18n.t("missing_btn_reconnect"), "ProjectsMissingBtnLabel" } }
+    local key_d = { { " d ", "ProjectsMissingKeyBadge" }, { " " .. i18n.t("missing_btn_remove"), "ProjectsMissingBtnLabel" } }
     local key_w = dw(" ") -- gap tra i due badge
     for _, c in ipairs(key_r) do key_w = key_w + dw(c[1]) end
     for _, c in ipairs(key_d) do key_w = key_w + dw(c[1]) end
@@ -1417,13 +1791,13 @@ render_preview = function(st)
     local top_pad = math.max(1, math.floor((ph - body_rows) / 2))
     for _ = 1, top_pad do lines[#lines + 1] = "" end
 
-    centered_text("⚠ PROGETTO ELIMINATO O SPOSTATO", "ProjectsMissingMsg")
+    centered_text("\u{26a0} " .. i18n.t("missing_warning"), "ProjectsMissingMsg")
     lines[#lines + 1] = ""
     for _, l in ipairs(path_lines) do centered_text(l, "ProjectsMissingPathPlain") end
     lines[#lines + 1] = ""
     for _, l in ipairs(desc_lines) do centered_text(l, "ProjectsMissingHint") end
     lines[#lines + 1] = ""
-    centered_text("premi i seguenti tasti:", "ProjectsMissingHint")
+    centered_text(i18n.t("missing_press_keys"), "ProjectsMissingHint")
 
     if key_rows == 1 then
       local both = {}
@@ -1452,8 +1826,13 @@ render_preview = function(st)
     return
   end
 
+  if (st.view_mode or "inspector") == "inspector" then
+    render_inspector(st)
+    return
+  end
+
   local readme = P.readme_path(p.path)
-  local title = "albero"
+  local title = ""
   local buf
 
   local w = st.preview.win
@@ -1462,7 +1841,7 @@ render_preview = function(st)
     pcall(vim.api.nvim_set_option_value, "number", false, { win = w })
     pcall(vim.api.nvim_set_option_value, "wrap", true, { win = w })
     pcall(vim.api.nvim_set_option_value, "linebreak", true, { win = w })
-    pcall(vim.api.nvim_set_option_value, "conceallevel", readme and 3 or 0, { win = w })
+    pcall(vim.api.nvim_set_option_value, "conceallevel", (readme and st.view_mode ~= "tree") and 3 or 0, { win = w })
     pcall(vim.api.nvim_set_option_value, "concealcursor", "nvic", { win = w })
   end
 
@@ -1520,7 +1899,40 @@ render_preview = function(st)
     st.preview.shown = buf
   end
 
-  pcall(vim.api.nvim_win_set_config, st.preview.win, { title = { { " " .. title .. " ", "ProjectsName" } }, title_pos = "right" })
+  local gh_url = P.get_github_url(p.path)
+  local html_file = P.get_html_preview_file(p.path)
+
+  local footer_preview = {
+    { " " .. i18n.t("btn_note") .. " ", "ProjectsLazyBtnLabel" },
+    { " n ", "ProjectsLazyBtnKey" },
+  }
+
+  footer_preview[#footer_preview + 1] = { "  ", "NormalFloat" }
+  footer_preview[#footer_preview + 1] = { " " .. i18n.t("btn_inspector") .. " ", "ProjectsLazyBtnLabel" }
+  footer_preview[#footer_preview + 1] = { " s ", "ProjectsLazyBtnKey" }
+
+
+
+  if html_file then
+    footer_preview[#footer_preview + 1] = { "  ", "NormalFloat" }
+    footer_preview[#footer_preview + 1] = { " " .. i18n.t("btn_web_preview") .. " ", "ProjectsLazyBtnLabel" }
+    footer_preview[#footer_preview + 1] = { " w ", "ProjectsLazyBtnKey" }
+  end
+
+  if gh_url and gh_url ~= "" then
+    footer_preview[#footer_preview + 1] = { "  ", "NormalFloat" }
+    footer_preview[#footer_preview + 1] = { " " .. i18n.t("btn_github") .. " ", "ProjectsLazyBtnLabel" }
+    footer_preview[#footer_preview + 1] = { " g ", "ProjectsLazyBtnKey" }
+  end
+
+
+
+  pcall(vim.api.nvim_win_set_config, st.preview.win, {
+    title = { { " " .. title .. " ", "ProjectsName" } },
+    title_pos = "right",
+    footer = footer_preview,
+    footer_pos = "center",
+  })
   pcall(vim.api.nvim_win_set_cursor, st.preview.win, { 1, 0 })
   render_preview_scrollbar(st)
 end
@@ -1588,10 +2000,20 @@ sync_sel_with_scroll = function(st)
   end
 end
 
-render_list = function(st)
+render_list = function(st, is_marquee_tick)
   local w = st.list.width
-  local cols = w >= (M.config.min_card * 2 + 2) and 2 or 1
-  local cw = math.floor((w - (cols - 1) * 2) / cols)
+  local cols = w >= (M.config.min_card * 2 + 4) and 2 or 1
+  local cw, pad_left, col_gap
+  if cols == 2 then
+    cw = math.floor((w - 3) / 2)
+    pad_left = " "
+    col_gap = " "
+  else
+    cw = math.max(20, w - 2)
+    local pad_w = math.max(1, math.floor((w - cw) / 2))
+    pad_left = string.rep(" ", pad_w)
+    col_gap = ""
+  end
   st.cols, st.card_width = cols, cw
 
   local lines, hls, pos, rows = {}, {}, {}, {}
@@ -1603,15 +2025,16 @@ render_list = function(st)
     end
   end
 
-  local function divider(label)
+  local function divider(label, is_first)
     local text, lhls = join({
       { "── ", "ProjectsMeta" },
       { label, "ProjectsGitBranch" },
       { " " .. string.rep("─", math.max(0, w - 5 - dw(label))), "ProjectsMeta" },
     })
-    push("")
+    if not is_first then
+      push("")
+    end
     push(text, lhls)
-    push("")
   end
 
   if st.dir_picker_mode then
@@ -1640,18 +2063,18 @@ render_list = function(st)
     end
     st.dir_sel = math.max(1, math.min(#st.dir_entries, st.dir_sel or 1))
 
-    local count_label = query ~= "" and ("%d/%d filtrate"):format(#st.dir_entries - 1, #subdirs) or tostring(#subdirs)
+    local count_label = query ~= "" and i18n.t("filtered_count", #st.dir_entries - 1, #subdirs) or tostring(#subdirs)
     if st.dir_picker_relocate then
-      divider("󰛒 riconnetti '" .. st.dir_picker_relocate.name .. "' (" .. count_label .. ")")
+      divider(ICON_RELOCATE .. " " .. i18n.t("section_relocate", st.dir_picker_relocate.name, count_label))
     else
-      divider("󰋜 sfoglia cartelle (" .. count_label .. ")")
+      divider(ICON_FOLDER_INSPECT .. " " .. i18n.t("section_browse", count_label))
     end
 
     for idx, item in ipairs(st.dir_entries) do
       local is_sel = (idx == st.dir_sel)
       local is_already = (item.type == "dir") and P.is_project(item.full)
-      local content = (item.type == "up") and "󰁝 .. (Cartella Superiore)" or (" " .. item.name)
-      local badge = is_already and "  󰄬 [GIÀ REGISTRATO]" or ""
+      local content = (item.type == "up") and (ICON_UP_DIR .. " " .. i18n.t("up_dir")) or (" " .. item.name)
+      local badge = is_already and ("  " .. ICON_SUCCESS .. " " .. i18n.t("already_registered_badge")) or ""
 
       local prefix = is_sel and " ❯ " or "   "
       local line = prefix .. content .. badge
@@ -1717,25 +2140,22 @@ render_list = function(st)
 
     pcall(vim.api.nvim_win_set_config, st.input.win, {
       title = st.dir_picker_relocate
-          and (" 󰛒 Riconnetti '" .. st.dir_picker_relocate.name .. "'  " .. curr_dir .. " ")
-        or (" 󰋜 Sfoglia Cartelle  " .. curr_dir .. " "),
+          and (" " .. ICON_RELOCATE .. " " .. i18n.t("title_reconnect", st.dir_picker_relocate.name, curr_dir))
+        or (" " .. ICON_FOLDER_INSPECT .. " " .. i18n.t("title_browse", curr_dir)),
       title_pos = "left",
     })
 
     local footer_chunks = {
-      { " Naviga ", "ProjectsLazyBtnLabel" },
-      { " Frecce ", "ProjectsLazyBtnKey" },
-      { "  ", "NormalFloat" },
-      { " Entra ", "ProjectsLazyBtnLabel" },
+      { " " .. i18n.t("btn_enter_dir") .. " ", "ProjectsLazyBtnLabel" },
       { " Enter ", "ProjectsLazyBtnKey" },
       { "  ", "NormalFloat" },
-      { " Indietro ", "ProjectsLazyBtnLabel" },
+      { " " .. i18n.t("btn_back") .. " ", "ProjectsLazyBtnLabel" },
       { " Backspace ", "ProjectsLazyBtnKey" },
       { "  ", "NormalFloat" },
-      st.dir_picker_relocate and { " Riconnetti Qui ", "ProjectsLazyBtnLabel" } or { " Aggiungi Progetto ", "ProjectsLazyBtnLabel" },
+      st.dir_picker_relocate and { " " .. i18n.t("btn_reconnect_here") .. " ", "ProjectsLazyBtnLabel" } or { " " .. i18n.t("btn_add_project") .. " ", "ProjectsLazyBtnLabel" },
       { " a ", "ProjectsLazyBtnKey" },
       { "  ", "NormalFloat" },
-      { " Esci ", "ProjectsLazyBtnLabel" },
+      { " " .. i18n.t("btn_exit") .. " ", "ProjectsLazyBtnLabel" },
       { " Esc ", "ProjectsLazyBtnKey" },
     }
 
@@ -1743,6 +2163,7 @@ render_list = function(st)
       footer = footer_chunks,
       footer_pos = "center",
     })
+    render_preview(st)
     return
   end
 
@@ -1773,12 +2194,13 @@ render_list = function(st)
     local prev_group = item_group(st.items[i - 1])
 
     if i == 1 or prev_group ~= group then
+      local is_first_div = (#lines == 0)
       if group == 1 and recents_n > 0 then
-        divider(("󰋚 recenti (%d)"):format(recents_n))
+        divider(ICON_HISTORY .. " " .. i18n.t("section_recent", recents_n), is_first_div)
       elseif group == 2 and mine_n > 0 then
-        divider(("i tuoi progetti (%d)"):format(mine_n))
+        divider(i18n.t("section_mine", mine_n), is_first_div)
       elseif group == 3 and others_n > 0 then
-        divider(("altri progetti (%d)"):format(others_n))
+        divider(i18n.t("section_others", others_n), is_first_div)
       end
     end
 
@@ -1786,16 +2208,19 @@ render_list = function(st)
     for c = 0, cols - 1 do
       local idx = i + c
       if st.items[idx] and item_group(st.items[idx]) == group then
-        built[c + 1] = card(st.items[idx], cw, idx == st.sel)
+        built[c + 1] = card(st.items[idx], cw, idx == st.sel, st)
         pos[idx] = #lines + 1
         placed = placed + 1
       end
     end
     for r = 1, CARD_ROWS do
       local chunks = {}
+      if pad_left ~= "" then
+        chunks[#chunks + 1] = { pad_left }
+      end
       for c = 1, cols do
         if built[c] then
-          if c > 1 then chunks[#chunks + 1] = { "  " } end
+          if c > 1 and col_gap ~= "" then chunks[#chunks + 1] = { col_gap } end
           vim.list_extend(chunks, built[c][r])
         end
       end
@@ -1803,7 +2228,6 @@ render_list = function(st)
       push(text, lhls)
       rows[#lines] = i
     end
-    push("")
     i = i + math.max(1, placed)
   end
 
@@ -1819,21 +2243,21 @@ render_list = function(st)
     local tags_chunks = {}
     for _, w_str in ipairs(words) do
       if w_str ~= "" then
-        local info = LANG_TOKENS[w_str:lower()]
+        local info = LANG_TOKENS[w_str:lower()] or VISIBILITY_TOKENS[w_str:lower()]
         local hl = info and info.hl or "ProjectsName"
-        local label = info and info.name or w_str
+        local label = info and info.name or w_str:upper()
         if #tags_chunks > 0 then tags_chunks[#tags_chunks + 1] = { "  " } end
         tags_chunks[#tags_chunks + 1] = { label, hl }
       end
     end
 
-    local title_text = "Nessun progetto trovato"
+    local title_text = i18n.t("empty_title")
     local pad_title = string.rep(" ", math.max(0, math.floor((w - dw(title_text)) / 2)))
     push(pad_title .. title_text, { { #pad_title, #pad_title + #title_text, "ProjectsNameSel" } })
 
     if #tags_chunks > 0 then
       push("")
-      local sub_text = "con i seguenti tag:"
+      local sub_text = i18n.t("empty_subtitle")
       local pad_sub = string.rep(" ", math.max(0, math.floor((w - dw(sub_text)) / 2)))
       push(pad_sub .. sub_text, { { #pad_sub, #pad_sub + #sub_text, "ProjectsDesc" } })
 
@@ -1869,11 +2293,20 @@ render_list = function(st)
   end
 
   st.pos, st.rows = pos, rows
+  if is_marquee_tick then return end
   ensure_visible(st)
 
-  local title_text = (" ❯ progetti  %d/%d "):format(#st.items, #st.all)
+  local title_text = (" \u{276f}" .. i18n.t("list_title")):format(#st.items, #st.all)
   if st.filter_query and st.filter_query ~= "" then
-    title_text = (" ❯ progetti  %s  %d/%d "):format(st.filter_query, #st.items, #st.all)
+    local words = vim.split(vim.trim(st.filter_query), "%s+")
+    local formatted_words = {}
+    for _, w_str in ipairs(words) do
+      if w_str ~= "" then
+        local info = LANG_TOKENS[w_str:lower()] or VISIBILITY_TOKENS[w_str:lower()]
+        formatted_words[#formatted_words + 1] = info and info.name or w_str:upper()
+      end
+    end
+    title_text = (" \u{276f}" .. i18n.t("list_title_filtered")):format(table.concat(formatted_words, " "), #st.items, #st.all)
   end
 
   pcall(vim.api.nvim_win_set_config, st.input.win, {
@@ -1881,25 +2314,24 @@ render_list = function(st)
     title_pos = "left",
   })
 
-  local footer_chunks = {
-    { " Ispettore ", "ProjectsLazyBtnLabel" },
-    { " s ", "ProjectsLazyBtnKey" },
-    { "  ", "NormalFloat" },
-    { " Aggiungi ", "ProjectsLazyBtnLabel" },
-    { " a ", "ProjectsLazyBtnKey" },
-    { "  ", "NormalFloat" },
-    { " Note ", "ProjectsLazyBtnLabel" },
-    { " n ", "ProjectsLazyBtnKey" },
-    { "  ", "NormalFloat" },
-    { " Cerca ", "ProjectsLazyBtnLabel" },
-    { " / ", "ProjectsLazyBtnKey" },
-    { "  ", "NormalFloat" },
-    { " Naviga ", "ProjectsLazyBtnLabel" },
-    { " Tab ", "ProjectsLazyBtnKey" },
-    { "  ", "NormalFloat" },
-    { " Apri ", "ProjectsLazyBtnLabel" },
-    { " Enter ", "ProjectsLazyBtnKey" },
-  }
+  local footer_chunks = {}
+  if #st.items == 0 then
+    footer_chunks = {
+      { " " .. i18n.t("btn_add") .. " ", "ProjectsLazyBtnLabel" },
+      { " a ", "ProjectsLazyBtnKey" },
+    }
+  else
+    footer_chunks = {
+      { " " .. i18n.t("btn_add") .. " ", "ProjectsLazyBtnLabel" },
+      { " a ", "ProjectsLazyBtnKey" },
+      { "  ", "NormalFloat" },
+      { " " .. i18n.t("btn_remove") .. " ", "ProjectsLazyBtnLabel" },
+      { " d ", "ProjectsLazyBtnKey" },
+      { "  ", "NormalFloat" },
+      { " " .. i18n.t("btn_open") .. " ", "ProjectsLazyBtnLabel" },
+      { " Enter ", "ProjectsLazyBtnKey" },
+    }
+  end
 
   pcall(vim.api.nvim_win_set_config, st.list.win, {
     footer = footer_chunks,
@@ -1914,12 +2346,41 @@ end
 
 move = function(st, delta)
   if #st.items == 0 then return end
+  local old_sel = st.sel
   st.sel = math.min(#st.items, math.max(1, st.sel + delta))
+  if st.sel ~= old_sel then
+    st.commit_limit = 100
+    local new_p = st.items[st.sel]
+    if new_p then
+      local commits = P.get_commit_details(new_p.path, 1)
+      if #commits == 0 then
+        st.show_all_commits = false
+      end
+    end
+  end
   refresh(st)
 end
 
 filter = function(st)
   local q = vim.api.nvim_buf_get_lines(st.input.buf, 0, 1, false)[1] or ""
+
+  local changed = false
+  local new_line = q:gsub("(%S+)", function(word)
+    local l_word = word:lower()
+    if VISIBILITY_TOKENS[l_word] and word ~= word:upper() then
+      changed = true
+      return word:upper()
+    end
+    return word
+  end)
+
+  if changed then
+    local cur = vim.api.nvim_win_get_cursor(st.input.win)
+    vim.api.nvim_buf_set_lines(st.input.buf, 0, 1, false, { new_line })
+    pcall(vim.api.nvim_win_set_cursor, st.input.win, cur)
+    q = new_line
+  end
+
   st.filter_query = q
   highlight_input_languages(st)
 
@@ -1929,12 +2390,16 @@ filter = function(st)
   else
     local words = vim.split(trimmed, "%s+")
     local lang_specs = {}
+    local vis_specs = {}
     local text_words = {}
 
     for _, w in ipairs(words) do
-      local info = LANG_TOKENS[w:lower()]
-      if info then
-        lang_specs[#lang_specs + 1] = info.name:lower()
+      local lang_info = LANG_TOKENS[w:lower()]
+      local vis_info = VISIBILITY_TOKENS[w:lower()]
+      if lang_info then
+        lang_specs[#lang_specs + 1] = lang_info.name:lower()
+      elseif vis_info then
+        vis_specs[#vis_specs + 1] = vis_info.type
       else
         text_words[#text_words + 1] = w:lower()
       end
@@ -1944,18 +2409,31 @@ filter = function(st)
 
     local scored_matches = {}
     for _, it in ipairs(st.all) do
-      local matches_langs = true
+      local matches_filters = true
       if #lang_specs > 0 then
         local p_search = (it.search or ""):lower()
         for _, req_lang in ipairs(lang_specs) do
           if not p_search:find(vim.pesc(req_lang)) then
-            matches_langs = false
+            matches_filters = false
             break
           end
         end
       end
 
-      if matches_langs then
+      if matches_filters and #vis_specs > 0 then
+        local gh_meta = P.get_github_meta(it.path)
+        for _, req_vis in ipairs(vis_specs) do
+          local is_priv = (gh_meta and gh_meta.is_private == true) or (it.is_private == true) or (it.visibility == "PRIVATE")
+          local is_pub = (gh_meta and gh_meta.is_private == false) or (it.is_private == false) or (it.visibility == "PUBLIC")
+          local is_loc = (not gh_meta) or (it.git and it.git.none == true)
+
+          if req_vis == "public" and not is_pub then matches_filters = false end
+          if req_vis == "private" and not is_priv then matches_filters = false end
+          if req_vis == "local" and not is_loc then matches_filters = false end
+        end
+      end
+
+      if matches_filters then
         if #text_words > 0 then
           local name_lower = tostring(it.name or ""):lower()
           local dir_lower = tostring(it.dir or ""):lower()
@@ -2044,7 +2522,7 @@ function M.open()
   set_hl()
   local all = P.list()
   if #all == 0 then
-    vim.notify("Nessun progetto trovato: controlla 'roots' ed 'extra' passati a require('projecthub').setup({...})", vim.log.levels.WARN)
+    vim.notify(i18n.t("notify_no_projects"), vim.log.levels.WARN)
     return
   end
 
@@ -2055,7 +2533,7 @@ function M.open()
   local LWf = math.floor(TW * M.config.left_ratio)
   local LW, RW = LWf - 2, TW - LWf - 2
 
-  local st = { all = all, items = all, sel = 1 }
+  local st = { all = all, items = all, sel = 1, inspector_mode = true }
 
   local function mkbuf(scratch)
     local b = vim.api.nvim_create_buf(false, true)
@@ -2103,7 +2581,7 @@ function M.open()
     width = RW,
     height = math.max(5, TH - 2),
     focusable = true,
-    title = " anteprima ",
+    title = " " .. i18n.t("title_preview") .. " ",
     title_pos = "right",
   })
   vim.wo[st.preview.win].conceallevel = 3
@@ -2231,17 +2709,25 @@ function M.open()
   local function close()
     if closed then return end
     closed = true
+    if st.marquee_timer then
+      pcall(function()
+        st.marquee_timer:stop()
+        st.marquee_timer:close()
+      end)
+      st.marquee_timer = nil
+    end
+    clear_kitty_graphics()
     if vim.api.nvim_win_is_valid(backdrop_win) then
       pcall(vim.api.nvim_win_close, backdrop_win, true)
     end
-    if st.list and vim.api.nvim_win_is_valid(st.list.sb_win) then
+    if st.list and st.list.sb_win and vim.api.nvim_win_is_valid(st.list.sb_win) then
       pcall(vim.api.nvim_win_close, st.list.sb_win, true)
     end
-    if st.preview and vim.api.nvim_win_is_valid(st.preview.sb_win) then
+    if st.preview and st.preview.sb_win and vim.api.nvim_win_is_valid(st.preview.sb_win) then
       pcall(vim.api.nvim_win_close, st.preview.sb_win, true)
     end
     for _, k in ipairs({ "input", "list", "preview" }) do
-      if st[k] and vim.api.nvim_win_is_valid(st[k].win) then
+      if st[k] and st[k].win and vim.api.nvim_win_is_valid(st[k].win) then
         pcall(vim.api.nvim_win_close, st[k].win, true)
       end
     end
@@ -2342,10 +2828,12 @@ function M.open()
   map(nav_bufs, "i", { "j" }, move_down)
   map(all_bufs, { "i", "n" }, { "<Up>", "<C-k>" }, move_up)
   map(nav_bufs, "i", { "k" }, move_up)
-  map(all_bufs, { "i", "n" }, { "<Right>", "<Tab>" }, move_right)
-  map(nav_bufs, "i", { "l" }, move_right)
-  map(all_bufs, { "i", "n" }, { "<Left>", "<S-Tab>", "<BS>" }, move_left)
-  map(nav_bufs, "i", { "h" }, move_left)
+  map(nav_bufs, { "i", "n" }, { "<Right>", "l" }, move_right)
+  map(nav_bufs, { "i", "n" }, { "<Left>", "h" }, move_left)
+  map(st.input.buf, "n", { "<Right>" }, move_right)
+  map(st.input.buf, "n", { "<Left>" }, move_left)
+  map(all_bufs, { "i", "n" }, { "<Tab>" }, move_right)
+  map(all_bufs, { "i", "n" }, { "<S-Tab>" }, move_left)
   map(all_bufs, { "i", "n" }, { "<PageDown>" }, function() move(st, st.cols * 3) end)
   map(all_bufs, { "i", "n" }, { "<PageUp>" }, function() move(st, -st.cols * 3) end)
   map(all_bufs, { "i", "n" }, { "<C-f>" }, function() scroll_preview(st, 10) end)
@@ -2355,15 +2843,79 @@ function M.open()
   end)
 
   map(all_bufs, "n", { "s" }, function()
-    st.inspector_mode = not st.inspector_mode
+    if st.web_preview_mode then
+      st.web_preview_mode = false
+      clear_kitty_graphics()
+      st.view_mode = "inspector"
+      refresh(st)
+      if vim.api.nvim_win_is_valid(st.list.win) then
+        pcall(vim.api.nvim_set_current_win, st.list.win)
+      end
+      return
+    end
+
+    st.web_preview_mode = false
+    clear_kitty_graphics()
+    local p = st.items[st.sel]
+    local has_readme = p and P.readme_path(p.path) ~= nil
+
+    local current = st.view_mode or "inspector"
+    if current == "inspector" then
+      st.view_mode = has_readme and "readme" or "tree"
+    else
+      st.view_mode = "inspector"
+    end
     st.show_all_commits = false
     refresh(st)
+    if vim.api.nvim_win_is_valid(st.list.win) then
+      pcall(vim.api.nvim_set_current_win, st.list.win)
+    end
   end)
 
   map(all_bufs, "n", { "c" }, function()
-    st.inspector_mode = true
-    st.show_all_commits = not st.show_all_commits
-    refresh(st)
+    local p = st.items[st.sel]
+    if p then
+      local commits = P.get_commit_details(p.path, 1)
+      if #commits == 0 then
+        st.show_all_commits = false
+        vim.notify(ICON_HISTORY .. " " .. i18n.t("notify_no_commits", p.name), vim.log.levels.WARN)
+        return
+      end
+      st.view_mode = "inspector"
+      st.commit_limit = 100
+      st.show_all_commits = not st.show_all_commits
+      refresh(st)
+    end
+  end)
+
+  map(all_bufs, "n", { "w" }, function()
+    local p = st.items[st.sel]
+    if p then
+      local html_file = P.get_html_preview_file(p.path)
+      if html_file then
+        st.web_preview_mode = not st.web_preview_mode
+        if not st.web_preview_mode then
+          clear_kitty_graphics()
+          st.view_mode = "inspector"
+        end
+        refresh(st)
+      end
+    end
+  end)
+
+  map(all_bufs, "n", { "W" }, function()
+    local p = st.items[st.sel]
+    if p then
+      local html_file = P.get_html_preview_file(p.path)
+      if html_file then
+        vim.notify(ICON_GLOBE .. " " .. i18n.t("notify_opening_web_preview", html_file), vim.log.levels.INFO)
+        if vim.ui and vim.ui.open then
+          pcall(vim.ui.open, html_file)
+        else
+          pcall(vim.fn.jobstart, { "open", html_file })
+        end
+      end
+    end
   end)
 
   map(all_bufs, "n", { "g" }, function()
@@ -2371,14 +2923,14 @@ function M.open()
     if p then
       local gh_url = P.get_github_url(p.path)
       if gh_url and gh_url ~= "" then
-        vim.notify("󰖟 Apertura " .. gh_url .. " nel browser...", vim.log.levels.INFO)
+        vim.notify(ICON_GLOBE .. " " .. i18n.t("notify_opening_github", gh_url), vim.log.levels.INFO)
         if vim.ui and vim.ui.open then
           vim.ui.open(gh_url)
         else
           vim.fn.jobstart({ "open", gh_url }, { detach = true })
         end
       else
-        vim.notify("󰅖 Questo progetto non ha un repository GitHub collegato", vim.log.levels.WARN)
+        vim.notify(ICON_ERROR .. " " .. i18n.t("notify_no_github"), vim.log.levels.WARN)
       end
     end
   end)
@@ -2391,18 +2943,31 @@ function M.open()
       if st.dir_picker_relocate then
         local old_p = st.dir_picker_relocate
         if P.is_project(target_path) then
-          vim.notify("󰄬 Già Registrato\n'" .. vim.fn.fnamemodify(target_path, ":t") .. "' è già presente nei tuoi progetti.\nScegli un'altra cartella.", vim.log.levels.WARN)
+          vim.notify(
+            ICON_SUCCESS .. " " .. i18n.t("notify_already_registered_title")
+              .. "\n" .. i18n.t("notify_already_registered_body", vim.fn.fnamemodify(target_path, ":t")),
+            vim.log.levels.WARN
+          )
           return
         else
           P.remove_custom_extra(old_p.path)
           P.remove_recent(old_p.path)
 
-          local ok, title, reason = P.add_custom_extra(target_path)
+          local ok, code, arg = P.add_custom_extra(target_path)
           if ok then
             P.add_recent(target_path)
-            vim.notify("󰄬 Progetto Riconnesso Con Successo!\nIl nuovo percorso di '" .. old_p.name .. "' è:\n" .. target_path, vim.log.levels.INFO)
+            vim.notify(
+              ICON_SUCCESS .. " " .. i18n.t("notify_reconnected_title")
+                .. "\n" .. i18n.t("notify_reconnected_body", old_p.name, target_path),
+              vim.log.levels.INFO
+            )
           else
-            vim.notify("󰅖 Riconnessione Fallita: " .. title .. "\nMotivo: " .. reason, vim.log.levels.ERROR)
+            local fail_title, fail_body = add_extra_result_text(code, arg)
+            vim.notify(
+              ICON_ERROR .. " " .. i18n.t("notify_reconnect_failed_title", fail_title)
+                .. "\n" .. i18n.t("notify_reconnect_failed_body", fail_body),
+              vim.log.levels.ERROR
+            )
           end
 
           st.dir_picker_mode = false
@@ -2416,15 +2981,16 @@ function M.open()
         end
       end
 
-      local ok, title, reason = P.add_custom_extra(target_path)
+      local ok, code, arg = P.add_custom_extra(target_path)
+      local res_title, res_body = add_extra_result_text(code, arg)
       if ok then
         P.add_recent(target_path)
-        vim.notify("󰄬 " .. title .. "\n" .. reason, vim.log.levels.INFO)
+        vim.notify(ICON_SUCCESS .. " " .. res_title .. "\n" .. res_body, vim.log.levels.INFO)
       else
-        if title == "Già Registrato" then
-          vim.notify("󰄬 " .. title .. "\n" .. reason, vim.log.levels.WARN)
+        if code == "already_registered" then
+          vim.notify(ICON_SUCCESS .. " " .. res_title .. "\n" .. res_body, vim.log.levels.WARN)
         else
-          vim.notify("󰅖 Operazione Fallita: " .. title .. "\nMotivo: " .. reason, vim.log.levels.ERROR)
+          vim.notify(ICON_ERROR .. " " .. i18n.t("notify_op_failed_title", res_title) .. "\n" .. i18n.t("notify_op_failed_body", res_body), vim.log.levels.ERROR)
         end
       end
 
@@ -2449,7 +3015,7 @@ function M.open()
     if p then
       P.remove_recent(p.path)
       P.remove_custom_extra(p.path)
-      vim.notify("󰄬 Progetto Rimosso\nIl riferimento a '" .. p.name .. "' è stato eliminato con successo dai tuoi progetti.", vim.log.levels.INFO)
+      vim.notify(ICON_SUCCESS .. " " .. i18n.t("notify_removed_title") .. "\n" .. i18n.t("notify_removed_body", p.name), vim.log.levels.INFO)
       st.all = P.list(true)
       filter(st)
       P.load_git(st.all, function() render_list(st) end, true)
@@ -2477,6 +3043,14 @@ function M.open()
 
   map(all_bufs, "n", { "r" }, start_relocate_picker)
 
+  -- Switch lingua interfaccia (it <-> en), a runtime, senza uscire dalla dashboard.
+  map(all_bufs, "n", { "L" }, function()
+    if st.dir_picker_mode then return end
+    config.options.language = (i18n.get_lang() == "it") and "en" or "it"
+    vim.notify(i18n.t("notify_lang_switched"), vim.log.levels.INFO)
+    M.refresh()
+  end)
+
   local function prompt_note()
     local p = st.items[st.sel]
     if not p then return end
@@ -2486,15 +3060,15 @@ function M.open()
     refresh(st)
 
     vim.ui.input({
-      prompt = " 󰠮 Nota per " .. p.name .. ": ",
+      prompt = i18n.t("prompt_note", p.name),
       default = current_note,
     }, function(input)
       if input ~= nil and vim.trim(input) ~= "" then
         P.save_note(p.path, vim.trim(input))
-        vim.notify("󰄬 Nota per '" .. p.name .. "' salvata con successo!", vim.log.levels.INFO)
+        vim.notify(ICON_SUCCESS .. " " .. i18n.t("notify_note_saved", p.name), vim.log.levels.INFO)
       elseif input == "" then
         P.save_note(p.path, "")
-        vim.notify("󰅖 Nota per '" .. p.name .. "' rimossa", vim.log.levels.WARN)
+        vim.notify(ICON_ERROR .. " " .. i18n.t("notify_note_removed", p.name), vim.log.levels.WARN)
       end
       st.inspector_mode = true
       refresh(st)
@@ -2569,6 +3143,12 @@ function M.open()
   end)
   map({ st.list.buf, st.preview.buf }, "n", { "<Esc>", "<C-c>" }, function()
     vim.cmd("stopinsert")
+    if st.dir_picker_mode then
+      st.dir_picker_mode = false
+      st.dir_picker_relocate = nil
+      refresh(st)
+      return
+    end
     close()
   end)
   map(all_bufs, { "i", "n" }, { "<CR>" }, function()
@@ -2589,22 +3169,16 @@ function M.open()
       local h = vim.api.nvim_win_get_height(st.list.win)
       if m.winid == st.list.sb_win or m.wincol >= w - 1 or m.wincol <= 0 then
         is_dragging = true
-        local max_content = 1
-        if st.pos then
-          for _, lnum in pairs(st.pos) do
-            if lnum + CARD_ROWS - 1 > max_content then
-              max_content = lnum + CARD_ROWS - 1
-            end
-          end
-        end
+        local max_content = vim.api.nvim_buf_line_count(st.list.buf)
+        if max_content <= 1 then max_content = 1 end
         if max_content > h then
-          local ratio = (m.winrow - 1) / math.max(1, h - 1)
+          local ratio = math.min(1, math.max(0, (m.winrow - 1) / math.max(1, h - 1)))
           local target_top = math.floor(ratio * (max_content - h)) + 1
           target_top = math.max(1, math.min(max_content - h + 1, target_top))
           vim.api.nvim_win_call(st.list.win, function()
             vim.fn.winrestview({ topline = target_top })
           end)
-          render_scrollbar(st)
+          sync_sel_with_scroll(st)
           return
         end
       end
@@ -2620,13 +3194,23 @@ function M.open()
       local pbuf = vim.api.nvim_win_get_buf(st.preview.win)
       local total_lines = vim.api.nvim_buf_line_count(pbuf)
       if (m.winid == st.preview.sb_win or m.wincol >= pw - 1 or m.wincol <= 0) and total_lines > ph then
-        local ratio = (m.winrow - 1) / math.max(1, ph - 1)
+        local ratio = math.min(1, math.max(0, (m.winrow - 1) / math.max(1, ph - 1)))
         local target_top = math.floor(ratio * (total_lines - ph)) + 1
         target_top = math.max(1, math.min(total_lines - ph + 1, target_top))
         vim.api.nvim_win_call(st.preview.win, function()
           vim.fn.winrestview({ topline = target_top, lnum = target_top, leftcol = 0 })
         end)
         render_preview_scrollbar(st)
+
+        if target_top + ph >= total_lines - 3 and st.inspector_mode then
+          local p_item = st.items[st.sel]
+          local total_git_commits = (p_item and p_item.git and tonumber(p_item.git.commits)) or 0
+          local cur_lim = st.commit_limit or 100
+          if cur_lim < total_git_commits then
+            st.commit_limit = cur_lim + 100
+            render_inspector(st)
+          end
+        end
       end
     end
   end
@@ -2661,7 +3245,30 @@ function M.open()
     callback = function() filter(st) end,
   })
 
-  local grp = vim.api.nvim_create_augroup("CustomProjects", { clear = true })
+  for _, b in ipairs(all_bufs) do
+    pcall(vim.api.nvim_buf_create_user_command, b, "q", function()
+      close()
+    end, { force = true })
+    pcall(vim.api.nvim_buf_create_user_command, b, "quit", function()
+      close()
+    end, { force = true })
+    pcall(vim.api.nvim_buf_create_user_command, b, "qa", function()
+      close()
+    end, { force = true })
+  end
+
+  local grp = vim.api.nvim_create_augroup("CustomProjects_" .. st.input.buf, { clear = true })
+
+  for _, b in ipairs(all_bufs) do
+    vim.api.nvim_create_autocmd({ "QuitPre", "BufWipeout", "BufDelete" }, {
+      group = grp,
+      buffer = b,
+      callback = function()
+        close()
+      end,
+    })
+  end
+
   vim.api.nvim_create_autocmd("WinEnter", {
     group = grp,
     callback = function()
@@ -2692,6 +3299,23 @@ function M.open()
     end,
   })
 
+  st.marquee_offset = 0
+  local timer = (vim.uv or vim.loop).new_timer()
+  st.marquee_timer = timer
+  timer:start(450, 450, vim.schedule_wrap(function()
+    if closed then
+      pcall(function()
+        timer:stop()
+        timer:close()
+      end)
+      return
+    end
+    st.marquee_offset = st.marquee_offset + 1
+    if st.list and vim.api.nvim_win_is_valid(st.list.win) and vim.api.nvim_buf_is_valid(st.list.buf) then
+      render_list(st, true)
+    end
+  end))
+
   -- Caricamento Asincrono non bloccante 1: Stato Git
   P.load_git(st.all, function()
     if not closed then reapply(st) end
@@ -2702,7 +3326,23 @@ function M.open()
     if not closed then render_list(st) end
   end)
 
+  M.active_st = st
   return st
+end
+
+--- Ri-renderizza la dashboard aperta. Ri-scansiona anche i progetti (non
+--- solo il disegno a schermo): serve perche' alcuni campi come "oggi"/
+--- "Mancante" sono calcolati una volta sola dentro P.list() e restano
+--- nella vecchia lingua finche' non si forza un refresh dei dati, ad
+--- esempio dopo un cambio lingua da fuori dalla dashboard (:ProjectHubLang).
+function M.refresh()
+  if not M.is_open() then return end
+  local st = M.active_st
+  st.all = P.list(true)
+  filter(st)
+  P.load_git(st.all, function() render_list(st) end, true)
+  P.load_languages(st.all, function() render_list(st) end, true)
+  refresh(st)
 end
 
 return M
