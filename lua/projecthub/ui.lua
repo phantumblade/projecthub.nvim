@@ -2407,13 +2407,54 @@ filter = function(st)
 
     local text_q = table.concat(text_words, " ")
 
+    local function project_has_language(it, req_lang_name)
+      if not it then return false end
+      local req_lower = req_lang_name:lower()
+
+      -- 1. Check it.languages list (exact language name match)
+      if it.languages and #it.languages > 0 then
+        for _, l in ipairs(it.languages) do
+          if l.name and l.name:lower() == req_lower then
+            return true
+          end
+        end
+      end
+
+      -- 2. Check it.type (exact type match and platform type inferences)
+      if it.type then
+        local t_lower = it.type:lower()
+        if t_lower == req_lower then
+          return true
+        end
+        if t_lower == "node" and (req_lower == "javascript" or req_lower == "typescript") then
+          return true
+        elseif t_lower == "web" and (req_lower == "html" or req_lower == "css" or req_lower == "javascript") then
+          return true
+        elseif t_lower == "android" and (req_lower == "kotlin" or req_lower == "java") then
+          return true
+        elseif t_lower == "ios" and req_lower == "swift" then
+          return true
+        end
+      end
+
+      -- 3. Check whole word match in it.search with frontier pattern
+      if it.search then
+        local s_lower = it.search:lower()
+        local pattern = "%f[%a]" .. vim.pesc(req_lower) .. "%f[%A]"
+        if s_lower:match(pattern) then
+          return true
+        end
+      end
+
+      return false
+    end
+
     local scored_matches = {}
     for _, it in ipairs(st.all) do
       local matches_filters = true
       if #lang_specs > 0 then
-        local p_search = (it.search or ""):lower()
         for _, req_lang in ipairs(lang_specs) do
-          if not p_search:find(vim.pesc(req_lang)) then
+          if not project_has_language(it, req_lang) then
             matches_filters = false
             break
           end
