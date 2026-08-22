@@ -3575,26 +3575,28 @@ function M.open()
   })
   vim.api.nvim_create_autocmd("ColorScheme", { buffer = st.input.buf, callback = set_hl })
 
-  vim.api.nvim_create_autocmd({ "FocusGained", "VimResume" }, {
-    group = grp,
-    callback = function()
-      if closed then return end
-      P.load_git(st.all, function()
-        if not closed then
-          render_list(st)
+  local function live_refresh_git()
+    if closed then return end
+    P.load_git(st.all, function()
+      if not closed then
+        render_list(st)
+        render_preview(st)
+      end
+    end, true)
+
+    local cur_item = st.items[st.sel]
+    if cur_item then
+      P.async_load_github_meta(cur_item.path, function()
+        if not closed and st.items[st.sel] == cur_item then
           render_preview(st)
         end
       end, true)
+    end
+  end
 
-      local cur_item = st.items[st.sel]
-      if cur_item then
-        P.async_load_github_meta(cur_item.path, function()
-          if not closed and st.items[st.sel] == cur_item then
-            render_preview(st)
-          end
-        end, true)
-      end
-    end,
+  vim.api.nvim_create_autocmd({ "FocusGained", "VimResume", "BufWritePost", "FileChangedShellPost" }, {
+    group = grp,
+    callback = live_refresh_git,
   })
 
   vim.api.nvim_create_autocmd("VimResized", {
@@ -3616,6 +3618,7 @@ function M.open()
   })
 
   st.marquee_offset = 0
+  local live_git_tick = 0
   local timer = (vim.uv or vim.loop).new_timer()
   st.marquee_timer = timer
   timer:start(450, 450, vim.schedule_wrap(function()
@@ -3629,6 +3632,11 @@ function M.open()
     st.marquee_offset = st.marquee_offset + 1
     if st.list and vim.api.nvim_win_is_valid(st.list.win) and vim.api.nvim_buf_is_valid(st.list.buf) then
       render_list(st, true)
+    end
+
+    live_git_tick = live_git_tick + 1
+    if live_git_tick % 3 == 0 then
+      live_refresh_git()
     end
   end))
 

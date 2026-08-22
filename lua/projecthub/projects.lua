@@ -535,6 +535,9 @@ function M.list(refresh)
 end
 
 function M.load_git(items, on_done, force)
+  if force then
+    M.clear_commit_cache()
+  end
   M.load_github_meta_all(items)
   local queue = {}
   for _, it in ipairs(items) do
@@ -585,15 +588,21 @@ function M.load_git(items, on_done, force)
             for _, line in ipairs(data) do
               local b = line:match("^# branch%.head%s+(.+)")
               if b then g.branch = b end
-              local ab = line:match("^# branch%.ab%s+%+(%d+)%s+%-(%d+)")
-              if ab then
-                local a, beh = line:match("^# branch%.ab%s+%+(%d+)%s+%-(%d+)")
+              local a, beh = line:match("^# branch%.ab%s+%+(%d+)%s+%-(%d+)")
+              if a and beh then
                 g.ahead, g.behind = tonumber(a) or 0, tonumber(beh) or 0
               end
-              if line:match("^[12]%s+[M%?%.]") then g.modified = g.modified + 1 end
-              if line:match("^[12]%s+[A-Z]") then g.staged = g.staged + 1 end
-              if line:match("^%?") then g.untracked = g.untracked + 1 end
-              if line:match("^u") then g.conflicts = g.conflicts + 1 end
+              local xy = line:match("^[12]%s+(%S+)")
+              if xy and #xy >= 2 then
+                local x = xy:sub(1, 1)
+                local y = xy:sub(2, 2)
+                if x ~= "." then g.staged = g.staged + 1 end
+                if y ~= "." then g.modified = g.modified + 1 end
+              elseif line:match("^%?") then
+                g.untracked = g.untracked + 1
+              elseif line:match("^u") then
+                g.conflicts = g.conflicts + 1
+              end
             end
 
             g.dirty = (g.modified + g.staged + g.untracked + g.conflicts) > 0
@@ -684,6 +693,18 @@ GH_CACHE = load_gh_cache_from_disk()
 
 local COMMIT_CACHE = {}
 
+function M.clear_commit_cache(path)
+  if path then
+    for k, _ in pairs(COMMIT_CACHE) do
+      if k:sub(1, #path) == path then
+        COMMIT_CACHE[k] = nil
+      end
+    end
+  else
+    COMMIT_CACHE = {}
+  end
+end
+
 function M.has_commit_cache(key)
   return COMMIT_CACHE[key] ~= nil
 end
@@ -697,10 +718,10 @@ function M.has_gh_cache(path)
   return false
 end
 
-function M.get_commit_details(path, limit)
+function M.get_commit_details(path, limit, force)
   limit = limit or 25
   local key = path .. ":" .. tostring(limit)
-  if COMMIT_CACHE[key] then
+  if not force and COMMIT_CACHE[key] then
     return COMMIT_CACHE[key].commits, COMMIT_CACHE[key].stats
   end
 
