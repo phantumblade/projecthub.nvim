@@ -1208,6 +1208,11 @@ local function render_inspector(st)
   end
   local buf = st.preview.buf
 
+  local saved_view = nil
+  if vim.api.nvim_win_is_valid(st.preview.win) and vim.api.nvim_win_get_buf(st.preview.win) == buf then
+    saved_view = vim.api.nvim_win_call(st.preview.win, vim.fn.winsaveview)
+  end
+
   vim.bo[buf].modifiable = true
   vim.bo[buf].readonly = false
   vim.bo[buf].bufhidden = "hide"
@@ -1670,32 +1675,10 @@ local function render_inspector(st)
   vim.api.nvim_win_set_buf(st.preview.win, buf)
   st.preview.shown = buf
 
-  if not st.commit_scroll_autocmd then
-    st.commit_scroll_autocmd = true
-    vim.api.nvim_create_autocmd({ "CursorMoved", "CursorMovedI" }, {
-      group = vim.api.nvim_create_augroup("ProjectHubCommitScroll", { clear = true }),
-      callback = function()
-        if st.inspector_mode and vim.api.nvim_win_is_valid(st.preview.win) then
-          pcall(function()
-            local p_item = st.items[st.sel]
-            if p_item then
-              local vista = vim.api.nvim_win_call(st.preview.win, vim.fn.winsaveview)
-              local topline = vista.topline or 1
-              local h = vim.api.nvim_win_get_height(st.preview.win)
-              local cur = vim.api.nvim_win_get_cursor(st.preview.win)
-              local buf_len = vim.api.nvim_buf_line_count(st.preview.buf)
-              local total_git_commits = (p_item.git and tonumber(p_item.git.commits)) or 0
-              local current_limit = st.commit_limit or 100
-              local near_bottom = (topline + h >= buf_len - 5) or (cur[1] >= math.max(1, buf_len - 12))
-              if near_bottom and current_limit < total_git_commits then
-                st.commit_limit = current_limit + 100
-                render_inspector(st)
-              end
-            end
-          end)
-        end
-      end,
-    })
+  if saved_view and vim.api.nvim_win_is_valid(st.preview.win) then
+    pcall(vim.api.nvim_win_call, st.preview.win, function()
+      vim.fn.winrestview(saved_view)
+    end)
   end
 
   local gh_url = P.get_github_url(p.path)
