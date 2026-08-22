@@ -1389,7 +1389,7 @@ local function render_inspector(st)
     local hash_str = tostring(c.hash or "???") .. " "
     local b_clean = tostring(b_name or "main"):gsub("^%[", ""):gsub("%]$", "")
     local b_str = "󰘬 " .. b_clean .. "  "
-    local date_str = tostring(c.age or "")
+    local date_str = i18n.format_relative_time(tostring(c.age or ""))
     local author_name = tostring(c.author or "")
     local role_icon = c.is_owner and M.OWNER_ICON or M.MEMBER_ICON
     local author_pill = (c.show_author and author_name ~= "") and (" " .. role_icon .. author_name .. " ") or ""

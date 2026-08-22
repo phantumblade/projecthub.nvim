@@ -333,4 +333,39 @@ function M.t(key, ...)
   return str
 end
 
+--- Converte le date relative di Git (es. "2 minutes ago", "5 hours ago")
+--- nella lingua dell'interfaccia corrente.
+function M.format_relative_time(raw_str)
+  if not raw_str or raw_str == "" then return "" end
+  local lang = M.get_lang()
+  if lang == "en" then
+    return raw_str
+  end
+
+  local s = vim.trim(raw_str:lower())
+  if s == "just now" or s:find("second") then
+    return "pochi secondi fa"
+  end
+
+  local num, unit = s:match("^(%d+)%s+([%a]+)%s+ago$")
+  if num and unit then
+    local n = tonumber(num) or 1
+    if unit:find("^min") then
+      return (n == 1) and "1 minuto fa" or string.format("%d minuti fa", n)
+    elseif unit:find("^hour") then
+      return (n == 1) and "1 ora fa" or string.format("%d ore fa", n)
+    elseif unit:find("^day") then
+      return (n == 1) and "1 giorno fa" or string.format("%d giorni fa", n)
+    elseif unit:find("^week") then
+      return (n == 1) and "1 settimana fa" or string.format("%d settimane fa", n)
+    elseif unit:find("^month") then
+      return (n == 1) and "1 mese fa" or string.format("%d mesi fa", n)
+    elseif unit:find("^year") then
+      return (n == 1) and "1 anno fa" or string.format("%d anni fa", n)
+    end
+  end
+
+  return raw_str
+end
+
 return M
