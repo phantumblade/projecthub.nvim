@@ -188,6 +188,12 @@ require("projecthub").setup({
     min_card = 34,      -- Minimum card width before switching to single column
   },
 
+  -- Sound effects (bundled out-of-the-box, zero external downloads needed)
+  sound = {
+    enabled = true,     -- Set to false to disable all audio feedback
+    volume = 0.5,       -- Volume level (0.0 to 1.0)
+  },
+
   -- Custom open callback. If nil, defaults to:
   -- changing cwd (`cd`), opening README.md in main buffer, and opening Neo-tree.
   on_open = nil,
@@ -196,17 +202,25 @@ require("projecthub").setup({
 
 ---
 
-## Keybindings (Inside Dashboard)
+## Commands & Keybindings
+
+### User Commands
+- `:ProjectHub` (or `:PH`) — Open the ProjectHub dashboard.
+- `:ProjectHubLang [it|en]` (or `:PHLang`) — Switch interface language.
+- `:ProjectHubSound` (or `:PHSound`) — Toggle UI sound effects ON / OFF.
+
+### Dashboard Keybindings
 
 | Key | Action | Description |
 |:---|:---|:---|
 | `↑` `↓` `←` `→` / `h` `j` `k` `l` | **Navigate** | Move selection between project cards |
 | `<CR>` (`Enter`) | **Open Project** | Changes `cwd`, opens `README.md` and displays Neo-tree |
 | `/` | **Search** | Focus the live search and filter input bar |
+| `<Tab>` | **Autocomplete** | Expand grey ghost-text suggestions for languages, tags, authors |
 | `c` | **Commit History** | Toggle full-screen infinite-scroll commit timeline |
 | `s` | **README Preview** | Toggle embedded Markdown / tree inspector preview |
 | `w` | **Web Preview** | Open project `index.html` in default web browser |
-| `g` | **GitHub** | Open repository URL on GitHub in default browser |
+| `g` | **Git Remote** | Open repository URL (GitHub / GitLab / Bitbucket) in browser |
 | `n` / `e` | **Notes** | Open scratchpad note editor for the selected project |
 | `a` | **Add Project** | Open interactive folder browser to track a new project |
 | `r` | **Reconnect** | Reconnect a missing/moved project to its new directory |
@@ -219,7 +233,7 @@ require("projecthub").setup({
 
 ## Data Storage
 
-ProjectHub stores custom projects, persistent notes, recents, and GitHub metadata cache in:
+ProjectHub stores custom projects, persistent notes, recents, and Git metadata cache in:
 ```
 ~/.local/share/nvim/projecthub/
   ├── custom_projects.json
@@ -228,6 +242,12 @@ ProjectHub stores custom projects, persistent notes, recents, and GitHub metadat
   └── recents.json
 ```
 Nothing is ever written into your dotfiles or repository folders.
+
+---
+
+## Credits & Acknowledgements
+
+- **[uisfx](https://github.com/romainsimon/uisfx)** by [Romain Simon](https://github.com/romainsimon) — For the beautiful, lightweight open-source UI sound effects library. The *Minimal* audio preset is bundled directly inside `sounds/minimal/` for instantaneous 0ms audio feedback.
 
 ---
 
@@ -240,8 +260,6 @@ This project is licensed under the **MIT License** — see the [LICENSE](LICENSE
 ## Support
 
 If you find `projecthub.nvim` helpful and it makes your workflow faster, consider giving it a ⭐ on GitHub!
-
----
 
 <p align="center">
   Crafted with ❤️ in Italy 🇮🇹 by <a href="https://github.com/phantumblade"><strong>phantumblade</strong></a>
