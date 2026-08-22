@@ -103,9 +103,14 @@ return {
     extra = {
       "~/.config/nvim",
     },
-    -- Your GitHub usernames (for owner badge classification)
+    -- Your GitHub/GitLab usernames (for owner badge & author filtering)
     me = {
       owners = { "your-github-username" },
+    },
+    -- UI Sound Effects (uisfx minimal preset)
+    sound = {
+      enabled = true, -- set false to disable all sounds
+      volume = 0.5,   -- volume level (0.0 to 1.0)
     },
   },
 }

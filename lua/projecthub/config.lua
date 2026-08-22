@@ -36,6 +36,12 @@ M.defaults = {
     min_card = 38, -- punto di equilibrio ideale: 2 colonne per finestre normali, 1 colonna un pelino prima quando si stringe o zoomma
   },
 
+  -- Effetti sonori dell'interfaccia (libreria uisfx - preset minimal).
+  sound = {
+    enabled = true, -- true per attivare i suoni, false per disattivarli
+    volume = 0.5,   -- volume da 0.0 a 1.0
+  },
+
   -- Callback invocata quando apri un progetto (tasto Enter). Riceve il
   -- percorso assoluto. Se nil, usa il comportamento di default: `tcd` nella
   -- cartella, poi ripristina la sessione con persistence.nvim se disponibile,

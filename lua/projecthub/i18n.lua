@@ -136,6 +136,7 @@ M.locales = {
     notify_note_saved = "Nota per '%s' salvata con successo!",
     notify_note_removed = "Nota per '%s' rimossa",
     notify_lang_switched = "Lingua impostata su italiano",
+    notify_git_update = "Attività Git rilevata su '%s': stato aggiornato!",
     prompt_note = " Nota per %s: ",
 
     err_empty_path_title = "Percorso Non Valido",
@@ -284,6 +285,7 @@ M.locales = {
     notify_note_saved = "Note for '%s' saved successfully!",
     notify_note_removed = "Note for '%s' removed",
     notify_lang_switched = "Language set to English",
+    notify_git_update = "Git activity detected on '%s': status updated!",
     prompt_note = " Note for %s: ",
 
     err_empty_path_title = "Invalid Path",
