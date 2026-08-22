@@ -125,11 +125,11 @@ function M.toggle()
   if target then
     M.set_enabled(true)
     M.play("toggle_on")
-    vim.notify("  " .. i18n.t("notify_sound_enabled"), vim.log.levels.INFO, { title = "Sound FX" })
+    vim.notify(i18n.t("notify_sound_enabled"), vim.log.levels.INFO, { title = "Sound FX", icon = " " })
   else
     M.play("toggle_off", true)
     M.set_enabled(false)
-    vim.notify("󰝟  " .. i18n.t("notify_sound_disabled"), vim.log.levels.WARN, { title = "Sound FX" })
+    vim.notify(i18n.t("notify_sound_disabled"), vim.log.levels.WARN, { title = "Sound FX", icon = "󰝟 " })
   end
 
   if package.loaded["snacks"] and _G.Snacks and _G.Snacks.dashboard and _G.Snacks.dashboard.update then

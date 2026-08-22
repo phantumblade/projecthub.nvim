@@ -451,6 +451,22 @@ local function add_extra_result_text(code, arg)
   return i18n.t(keys[1]), i18n.t(keys[2], arg)
 end
 
+local function notify(title_text, msg_text, level, icon_glyph, sound_ev)
+  if sound_ev then
+    sound.play(sound_ev)
+  end
+  level = level or vim.log.levels.INFO
+  local full_msg = title_text or ""
+  if msg_text and msg_text ~= "" and msg_text ~= title_text then
+    full_msg = title_text .. "\n" .. msg_text
+  end
+
+  vim.notify(full_msg, level, {
+    title = "ProjectHub",
+    icon = icon_glyph or ICON_SUCCESS,
+  })
+end
+
 local function get_author_pill_hl(author_name)
   local clean = tostring(author_name or "user"):lower():gsub("[%s%-_%./\\]", "")
   local h = 0
@@ -3256,7 +3272,7 @@ function M.open()
       local commits = P.get_commit_details(p.path, 1)
       if #commits == 0 then
         st.show_all_commits = false
-        vim.notify(ICON_HISTORY .. " " .. i18n.t("notify_no_commits", p.name), vim.log.levels.WARN)
+        notify(i18n.t("notify_no_commits", p.name), nil, vim.log.levels.WARN, ICON_HISTORY, "error")
         return
       end
       st.view_mode = "inspector"
@@ -3286,8 +3302,7 @@ function M.open()
     if p then
       local html_file = P.get_html_preview_file(p.path)
       if html_file then
-        sound.play("open")
-        vim.notify(ICON_GLOBE .. " " .. i18n.t("notify_opening_web_preview", html_file), vim.log.levels.INFO)
+        notify(i18n.t("notify_opening_web_preview", html_file), nil, vim.log.levels.INFO, ICON_GLOBE, "open")
         if vim.ui and vim.ui.open then
           pcall(vim.ui.open, html_file)
         else
@@ -3302,16 +3317,14 @@ function M.open()
     if p then
       local gh_url = P.get_github_url(p.path)
       if gh_url and gh_url ~= "" then
-        sound.play("open")
-        vim.notify(ICON_GLOBE .. " " .. i18n.t("notify_opening_github", gh_url), vim.log.levels.INFO, { title = "ProjectHub" })
+        notify(i18n.t("notify_opening_github", gh_url), nil, vim.log.levels.INFO, ICON_GLOBE, "open")
         if vim.ui and vim.ui.open then
           vim.ui.open(gh_url)
         else
           vim.fn.jobstart({ "open", gh_url }, { detach = true })
         end
       else
-        sound.play("error")
-        vim.notify(ICON_WARN .. " " .. i18n.t("notify_no_github"), vim.log.levels.WARN, { title = "ProjectHub" })
+        notify(i18n.t("notify_no_github"), nil, vim.log.levels.WARN, ICON_WARN, "error")
       end
     end
   end)
@@ -3324,12 +3337,12 @@ function M.open()
       if st.dir_picker_relocate then
         local old_p = st.dir_picker_relocate
         if P.is_project(target_path) then
-          sound.play("error")
-          vim.notify(
-            ICON_WARN .. " " .. i18n.t("notify_already_registered_title")
-              .. "\n" .. i18n.t("notify_already_registered_body", vim.fn.fnamemodify(target_path, ":t")),
+          notify(
+            i18n.t("notify_already_registered_title"),
+            i18n.t("notify_already_registered_body", vim.fn.fnamemodify(target_path, ":t")),
             vim.log.levels.WARN,
-            { title = "ProjectHub" }
+            ICON_WARN,
+            "error"
           )
           return
         else
@@ -3338,22 +3351,22 @@ function M.open()
 
           local ok, code, arg = P.add_custom_extra(target_path)
           if ok then
-            sound.play("connect")
             P.add_recent(target_path)
-            vim.notify(
-              ICON_SUCCESS .. " " .. i18n.t("notify_reconnected_title")
-                .. "\n" .. i18n.t("notify_reconnected_body", old_p.name, target_path),
+            notify(
+              i18n.t("notify_reconnected_title"),
+              i18n.t("notify_reconnected_body", old_p.name, target_path),
               vim.log.levels.INFO,
-              { title = "ProjectHub" }
+              ICON_RELOCATE,
+              "connect"
             )
           else
-            sound.play("error")
             local fail_title, fail_body = add_extra_result_text(code, arg)
-            vim.notify(
-              ICON_ERROR .. " " .. i18n.t("notify_reconnect_failed_title", fail_title)
-                .. "\n" .. i18n.t("notify_reconnect_failed_body", fail_body),
+            notify(
+              i18n.t("notify_reconnect_failed_title", fail_title),
+              i18n.t("notify_reconnect_failed_body", fail_body),
               vim.log.levels.ERROR,
-              { title = "ProjectHub" }
+              ICON_ERROR,
+              "error"
             )
           end
 
@@ -3371,15 +3384,13 @@ function M.open()
       local ok, code, arg = P.add_custom_extra(target_path)
       local res_title, res_body = add_extra_result_text(code, arg)
       if ok then
-        sound.play("success")
         P.add_recent(target_path)
-        vim.notify(ICON_SUCCESS .. " " .. res_title .. "\n" .. res_body, vim.log.levels.INFO, { title = "ProjectHub" })
+        notify(res_title, res_body, vim.log.levels.INFO, ICON_SUCCESS, "success")
       else
-        sound.play("error")
         if code == "already_registered" then
-          vim.notify(ICON_WARN .. " " .. res_title .. "\n" .. res_body, vim.log.levels.WARN, { title = "ProjectHub" })
+          notify(res_title, res_body, vim.log.levels.WARN, ICON_WARN, "error")
         else
-          vim.notify(ICON_ERROR .. " " .. i18n.t("notify_op_failed_title", res_title) .. "\n" .. i18n.t("notify_op_failed_body", res_body), vim.log.levels.ERROR, { title = "ProjectHub" })
+          notify(i18n.t("notify_op_failed_title", res_title), i18n.t("notify_op_failed_body", res_body), vim.log.levels.ERROR, ICON_ERROR, "error")
         end
       end
 
@@ -3402,10 +3413,9 @@ function M.open()
   map(all_bufs, "n", { "d" }, function()
     local p = st.items[st.sel]
     if p then
-      sound.play("delete")
       P.remove_recent(p.path)
       P.remove_custom_extra(p.path)
-      vim.notify(ICON_SUCCESS .. " " .. i18n.t("notify_removed_title") .. "\n" .. i18n.t("notify_removed_body", p.name), vim.log.levels.INFO, { title = "ProjectHub" })
+      notify(i18n.t("notify_removed_title"), i18n.t("notify_removed_body", p.name), vim.log.levels.INFO, ICON_TRASH, "delete")
       st.all = P.list(true)
       filter(st)
       P.load_git(st.all, function() render_list(st) end, true)
@@ -3436,9 +3446,8 @@ function M.open()
   -- Switch lingua interfaccia (it <-> en), a runtime, senza uscire dalla dashboard.
   map(all_bufs, "n", { "L" }, function()
     if st.dir_picker_mode then return end
-    sound.play("toggle")
     config.options.language = (i18n.get_lang() == "it") and "en" or "it"
-    vim.notify(i18n.t("notify_lang_switched"), vim.log.levels.INFO, { title = "ProjectHub" })
+    notify(i18n.t("notify_lang_switched"), nil, vim.log.levels.INFO, "\u{f075a} ", "toggle")
     M.refresh()
   end)
 
@@ -3456,12 +3465,10 @@ function M.open()
     }, function(input)
       if input ~= nil and vim.trim(input) ~= "" then
         P.save_note(p.path, vim.trim(input))
-        sound.play("checkpoint")
-        vim.notify(ICON_SUCCESS .. " " .. i18n.t("notify_note_saved", p.name), vim.log.levels.INFO, { title = "ProjectHub" })
+        notify(i18n.t("notify_note_saved", p.name), nil, vim.log.levels.INFO, ICON_NOTE, "checkpoint")
       elseif input == "" then
         P.save_note(p.path, "")
-        sound.play("delete")
-        vim.notify(ICON_WARN .. " " .. i18n.t("notify_note_removed", p.name), vim.log.levels.WARN, { title = "ProjectHub" })
+        notify(i18n.t("notify_note_removed", p.name), nil, vim.log.levels.WARN, ICON_NOTE, "delete")
       end
       st.inspector_mode = true
       refresh(st)
@@ -3712,11 +3719,7 @@ function M.open()
         end
 
         if updated_project then
-          sound.play("snap")
-          vim.notify(
-            ICON_GIT .. " " .. i18n.t("notify_git_update", updated_project.name),
-            vim.log.levels.INFO
-          )
+          notify(i18n.t("notify_git_update", updated_project.name), nil, vim.log.levels.INFO, ICON_GIT, "snap")
         end
 
         render_list(st)
