@@ -860,6 +860,77 @@ function M.get_recent_commits(path, limit)
   return M.get_commit_details(path, limit)
 end
 
+local function parse_git_remote(origin_url)
+  if not origin_url or origin_url == "" then return nil end
+  local url = vim.trim(origin_url)
+  local clean = url:gsub("%.git$", ""):gsub("/+$", "")
+
+  -- 1. Formato SSH: git@host:owner/repo
+  local ssh_user, ssh_host, ssh_path = clean:match("^([%w%._%-]+)@([^:]+):(.+)$")
+  if ssh_host and ssh_path then
+    local parts = vim.split(ssh_path:gsub("^/+", ""), "/")
+    if #parts >= 2 then
+      local owner = parts[1]
+      local repo = parts[#parts]
+      local forge = "git"
+      local h_low = ssh_host:lower()
+      if h_low:find("gitlab") then
+        forge = "gitlab"
+      elseif h_low:find("github") then
+        forge = "github"
+      elseif h_low:find("bitbucket") then
+        forge = "bitbucket"
+      elseif h_low:find("codeberg") then
+        forge = "codeberg"
+      end
+      local web_url = string.format("https://%s/%s/%s", ssh_host, owner, repo)
+      return {
+        host = ssh_host,
+        forge = forge,
+        owner = owner,
+        repo = repo,
+        web_url = web_url,
+        is_ssh = true,
+      }
+    end
+  end
+
+  -- 2. Formato HTTPS / HTTP: https://host/owner/repo
+  local proto, host, http_path = clean:match("^(https?):/+/([^/]+)/(.+)$")
+  if host and http_path then
+    if host:find("@") then
+      host = host:match("@(.+)$") or host
+    end
+    local parts = vim.split(http_path:gsub("^/+", ""), "/")
+    if #parts >= 2 then
+      local owner = parts[1]
+      local repo = parts[#parts]
+      local forge = "git"
+      local h_low = host:lower()
+      if h_low:find("gitlab") then
+        forge = "gitlab"
+      elseif h_low:find("github") then
+        forge = "github"
+      elseif h_low:find("bitbucket") then
+        forge = "bitbucket"
+      elseif h_low:find("codeberg") then
+        forge = "codeberg"
+      end
+      local web_url = string.format("%s://%s/%s/%s", proto, host, owner, repo)
+      return {
+        host = host,
+        forge = forge,
+        owner = owner,
+        repo = repo,
+        web_url = web_url,
+        is_ssh = false,
+      }
+    end
+  end
+
+  return nil
+end
+
 function M.get_github_meta(path)
   local c = GH_CACHE[path]
   if type(c) == "table" then
@@ -871,23 +942,27 @@ function M.get_github_meta(path)
     local ok_lines, lines = pcall(vim.fn.readfile, git_config)
     if ok_lines and lines then
       local content = table.concat(lines, "\n")
-      local owner_name, repo_name = content:match("github%.com[:/]([^/]+)/([^/%s%\"]+)")
-      if owner_name and repo_name then
-        repo_name = repo_name:gsub("%.git$", "")
-        local current_user = (config.options.me.owners and config.options.me.owners[1]) or ""
-        local is_my_repo = (current_user ~= "" and owner_name:lower() == current_user:lower())
-        local is_ssh = content:find("git@github%.com:") ~= nil
-        local is_priv = is_my_repo and is_ssh
-        local meta = {
-          is_private = is_priv,
-          stars = 0,
-          forks = 0,
-          owner = owner_name,
-          visibility = is_priv and "PRIVATE" or "PUBLIC",
-          is_fallback = true,
-        }
-        GH_CACHE[path] = meta
-        return meta
+      local remote_url = content:match('url%s*=%s*([^\r\n]+)')
+      if remote_url then
+        local r = parse_git_remote(remote_url)
+        if r then
+          local current_user = (config.options.me and config.options.me.owners and config.options.me.owners[1]) or ""
+          local is_my_repo = (current_user ~= "" and r.owner:lower() == current_user:lower())
+          local is_priv = is_my_repo and r.is_ssh
+          local meta = {
+            is_private = is_priv,
+            stars = 0,
+            forks = 0,
+            owner = r.owner,
+            repo = r.repo,
+            forge = r.forge,
+            web_url = r.web_url,
+            visibility = is_priv and "PRIVATE" or "PUBLIC",
+            is_fallback = true,
+          }
+          GH_CACHE[path] = meta
+          return meta
+        end
       end
     end
   end
@@ -918,68 +993,92 @@ function M.async_load_github_meta(path, callback, force)
     stdout_buffered = true,
     on_stdout = function(_, data)
       local origin_url = (data and data[1]) and vim.trim(data[1]) or ""
-      local clean_url = origin_url:gsub("%.git$", "")
-      local owner_name, repo_name = clean_url:match("github%.com[:/]([^/]+)/([^/]+)")
-      if not (owner_name and repo_name) then
+      local r = parse_git_remote(origin_url)
+      if not r then
         GH_CACHE[path] = false
         return
       end
 
-      -- API GitHub via `gh api` (autenticato: niente rate-limit da 60/ora
-      -- come con curl anonimo) per metadati completi (fork, parent, stelle e fork)
-      local gh_cmd = string.format("gh api %s 2>/dev/null", vim.fn.shellescape("repos/" .. owner_name .. "/" .. repo_name))
-      vim.fn.jobstart(gh_cmd, {
-        stdout_buffered = true,
-        on_stdout = function(_, api_data)
-          if api_data and #api_data > 0 then
-            local api_str = table.concat(api_data, "\n")
-            local ok, parsed = pcall(vim.json.decode, api_str)
-            if ok and type(parsed) == "table" and (parsed.stargazers_count or parsed.visibility or parsed.owner or parsed.parent or parsed.source) then
-              local is_priv = (parsed["private"] == true)
-              local parent_repo = nil
-              local p_stars, p_forks = 0, 0
-              local p_obj = parsed.parent or parsed.source
-              if p_obj then
-                parent_repo = p_obj.full_name or (p_obj.owner and p_obj.owner.login and (p_obj.owner.login .. "/" .. (p_obj.name or repo_name)))
-                p_stars = p_obj.stargazers_count or 0
-                p_forks = p_obj.forks_count or 0
+      -- Se è GitHub, interroga GitHub CLI API per arricchire con stelle, fork, parent
+      if r.forge == "github" then
+        local gh_cmd = string.format("gh api %s 2>/dev/null", vim.fn.shellescape("repos/" .. r.owner .. "/" .. r.repo))
+        vim.fn.jobstart(gh_cmd, {
+          stdout_buffered = true,
+          on_stdout = function(_, api_data)
+            if api_data and #api_data > 0 then
+              local api_str = table.concat(api_data, "\n")
+              local ok, parsed = pcall(vim.json.decode, api_str)
+              if ok and type(parsed) == "table" and (parsed.stargazers_count or parsed.visibility or parsed.owner or parsed.parent or parsed.source) then
+                local is_priv = (parsed["private"] == true)
+                local parent_repo = nil
+                local p_stars, p_forks = 0, 0
+                local p_obj = parsed.parent or parsed.source
+                if p_obj then
+                  parent_repo = p_obj.full_name or (p_obj.owner and p_obj.owner.login and (p_obj.owner.login .. "/" .. (p_obj.name or r.repo)))
+                  p_stars = p_obj.stargazers_count or 0
+                  p_forks = p_obj.forks_count or 0
+                end
+
+                local my_stars = parsed.stargazers_count or 0
+                local my_forks = parsed.forks_count or 0
+
+                local res = {
+                  is_private = is_priv,
+                  stars = (my_stars > 0) and my_stars or p_stars,
+                  forks = (my_forks > 0) and my_forks or p_forks,
+                  is_fork = (parsed.fork == true) or (parent_repo ~= nil),
+                  parent = parent_repo,
+                  visibility = tostring(parsed.visibility or (is_priv and "PRIVATE" or "PUBLIC")):upper(),
+                  owner = (parsed.owner and parsed.owner.login) and parsed.owner.login or r.owner,
+                  repo = r.repo,
+                  forge = "github",
+                  web_url = r.web_url,
+                  is_fallback = false,
+                }
+                GH_CACHE[path] = res
+                save_gh_cache_to_disk()
+                if callback then vim.schedule(callback) end
+                return
               end
-
-              local my_stars = parsed.stargazers_count or 0
-              local my_forks = parsed.forks_count or 0
-
-              local res = {
-                is_private = is_priv,
-                stars = (my_stars > 0) and my_stars or p_stars,
-                forks = (my_forks > 0) and my_forks or p_forks,
-                is_fork = (parsed.fork == true) or (parent_repo ~= nil),
-                parent = parent_repo,
-                visibility = tostring(parsed.visibility or (is_priv and "PRIVATE" or "PUBLIC")):upper(),
-                owner = (parsed.owner and parsed.owner.login) and parsed.owner.login or owner_name,
-                is_fallback = false,
-              }
-              GH_CACHE[path] = res
-              save_gh_cache_to_disk()
-              if callback then vim.schedule(callback) end
-              return
             end
-          end
 
-          local current_user = (config.options.me.owners and config.options.me.owners[1]) or ""
-          local is_my_repo = (current_user ~= "" and owner_name:lower() == current_user:lower())
-          local is_ssh = origin_url:find("git@github%.com:") ~= nil
-          local fallback = {
-            is_private = is_my_repo and is_ssh,
-            stars = 0,
-            forks = 0,
-            visibility = (is_my_repo and is_ssh) and "PRIVATE" or "PUBLIC",
-            owner = owner_name,
-            is_fallback = true,
-          }
-          GH_CACHE[path] = fallback
-          if callback then vim.schedule(callback) end
-        end,
-      })
+            local current_user = (config.options.me and config.options.me.owners and config.options.me.owners[1]) or ""
+            local is_my_repo = (current_user ~= "" and r.owner:lower() == current_user:lower())
+            local fallback = {
+              is_private = is_my_repo and r.is_ssh,
+              stars = 0,
+              forks = 0,
+              visibility = (is_my_repo and r.is_ssh) and "PRIVATE" or "PUBLIC",
+              owner = r.owner,
+              repo = r.repo,
+              forge = "github",
+              web_url = r.web_url,
+              is_fallback = true,
+            }
+            GH_CACHE[path] = fallback
+            save_gh_cache_to_disk()
+            if callback then vim.schedule(callback) end
+          end,
+        })
+      else
+        -- Per GitLab, Bitbucket, Codeberg e server Git remoti
+        local current_user = (config.options.me and config.options.me.owners and config.options.me.owners[1]) or ""
+        local is_my_repo = (current_user ~= "" and r.owner:lower() == current_user:lower())
+        local res = {
+          is_private = is_my_repo and r.is_ssh,
+          stars = 0,
+          forks = 0,
+          visibility = (is_my_repo and r.is_ssh) and "PRIVATE" or "PUBLIC",
+          owner = r.owner,
+          repo = r.repo,
+          forge = r.forge,
+          web_url = r.web_url,
+          is_fallback = false,
+        }
+        GH_CACHE[path] = res
+        save_gh_cache_to_disk()
+        if callback then vim.schedule(callback) end
+      end
     end,
   })
 end
@@ -993,18 +1092,20 @@ function M.load_github_meta_all(items)
 end
 
 function M.get_github_url(path)
+  local meta = M.get_github_meta(path)
+  if meta and meta.web_url then
+    return meta.web_url
+  end
+
   local r_cmd = string.format("git -C %s remote get-url origin 2>/dev/null", vim.fn.shellescape(path))
   local h_r = io.popen(r_cmd)
   if h_r then
     local origin_url = vim.trim(h_r:read("*a") or "")
     h_r:close()
     if origin_url ~= "" then
-      local clean_url = origin_url:gsub("%.git$", "")
-      local owner_name, repo_name = clean_url:match("github%.com[:/]([^/]+)/([^/]+)")
-      if owner_name and repo_name then
-        return string.format("https://github.com/%s/%s", owner_name, repo_name)
-      elseif origin_url:find("^https?://") then
-        return origin_url:gsub("%.git$", "")
+      local r = parse_git_remote(origin_url)
+      if r and r.web_url then
+        return r.web_url
       end
     end
   end

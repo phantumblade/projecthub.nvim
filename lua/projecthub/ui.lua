@@ -1666,9 +1666,21 @@ local function render_inspector(st)
     footer_preview[#footer_preview + 1] = { " w ", "ProjectsLazyBtnKey" }
   end
 
+  local remote_label = i18n.t("btn_github")
+  local meta = P.get_github_meta(p.path)
+  if meta and meta.forge == "gitlab" then
+    remote_label = "GitLab"
+  elseif meta and meta.forge == "bitbucket" then
+    remote_label = "Bitbucket"
+  elseif meta and meta.forge == "codeberg" then
+    remote_label = "Codeberg"
+  elseif meta and meta.forge == "git" then
+    remote_label = "Git"
+  end
+
   if gh_url and gh_url ~= "" then
     footer_preview[#footer_preview + 1] = { "  ", "NormalFloat" }
-    footer_preview[#footer_preview + 1] = { " " .. i18n.t("btn_github") .. " ", "ProjectsLazyBtnLabel" }
+    footer_preview[#footer_preview + 1] = { " " .. remote_label .. " ", "ProjectsLazyBtnLabel" }
     footer_preview[#footer_preview + 1] = { " g ", "ProjectsLazyBtnKey" }
   end
 
@@ -2086,9 +2098,21 @@ render_preview = function(st)
     footer_preview[#footer_preview + 1] = { " w ", "ProjectsLazyBtnKey" }
   end
 
+  local remote_label = i18n.t("btn_github")
+  local meta = P.get_github_meta(p.path)
+  if meta and meta.forge == "gitlab" then
+    remote_label = "GitLab"
+  elseif meta and meta.forge == "bitbucket" then
+    remote_label = "Bitbucket"
+  elseif meta and meta.forge == "codeberg" then
+    remote_label = "Codeberg"
+  elseif meta and meta.forge == "git" then
+    remote_label = "Git"
+  end
+
   if gh_url and gh_url ~= "" then
     footer_preview[#footer_preview + 1] = { "  ", "NormalFloat" }
-    footer_preview[#footer_preview + 1] = { " " .. i18n.t("btn_github") .. " ", "ProjectsLazyBtnLabel" }
+    footer_preview[#footer_preview + 1] = { " " .. remote_label .. " ", "ProjectsLazyBtnLabel" }
     footer_preview[#footer_preview + 1] = { " g ", "ProjectsLazyBtnKey" }
   end
 
