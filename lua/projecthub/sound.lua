@@ -98,6 +98,11 @@ function M.toggle()
     M.set_enabled(false)
     vim.notify("󰝟  " .. i18n.t("notify_sound_disabled"), vim.log.levels.WARN, { title = "Sound FX" })
   end
+
+  if package.loaded["snacks"] and _G.Snacks and _G.Snacks.dashboard and _G.Snacks.dashboard.update then
+    pcall(_G.Snacks.dashboard.update)
+  end
+
   return target
 end
 
