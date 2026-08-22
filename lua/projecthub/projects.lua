@@ -617,11 +617,30 @@ function M.load_git(items, on_done, force)
                 item.git = g
               end,
               on_exit = function()
-                pending = pending - 1
-                if pending == 0 then
-                  i = i + batch_size
-                  vim.schedule(process_batch)
-                end
+                local s_cmd = "git -C " .. vim.fn.shellescape(item.path) .. " shortlog -sn --no-merges HEAD 2>/dev/null"
+                vim.fn.jobstart(s_cmd, {
+                  stdout_buffered = true,
+                  on_stdout = function(_, s_data)
+                    if s_data and #s_data > 0 then
+                      local auths = {}
+                      for _, sl in ipairs(s_data) do
+                        local an = sl:match("^%s*%d+%s+(.+)")
+                        if an then
+                          local ac = vim.trim(an):lower():gsub("[%s%-_%.]", "")
+                          auths[ac] = true
+                        end
+                      end
+                      item.authors = auths
+                    end
+                  end,
+                  on_exit = function()
+                    pending = pending - 1
+                    if pending == 0 then
+                      i = i + batch_size
+                      vim.schedule(process_batch)
+                    end
+                  end,
+                })
               end,
             })
           end,

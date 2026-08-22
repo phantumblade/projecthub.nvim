@@ -2528,7 +2528,7 @@ move = function(st, delta)
   refresh(st)
 end
 
-filter = function(st)
+filter = function(st, immediate)
   local q = vim.api.nvim_buf_get_lines(st.input.buf, 0, 1, false)[1] or ""
 
   local changed = false
@@ -2549,214 +2549,237 @@ filter = function(st)
   end
 
   st.filter_query = q
+  -- Aggiorna istantaneamente highlights e ghost text (0ms, nessun blocco tasti)
   highlight_input_languages(st)
 
-  local trimmed = vim.trim(q)
-  if trimmed == "" then
-    st.items = st.all
-  else
-    local words = vim.split(trimmed, "%s+")
-    local lang_specs = {}
-    local vis_specs = {}
-    local author_specs = {}
-    local text_words = {}
+  local function apply_filter()
+    local trimmed = vim.trim(st.filter_query or "")
+    if trimmed == "" then
+      st.items = st.all
+    else
+      local words = vim.split(trimmed, "%s+")
+      local lang_specs = {}
+      local vis_specs = {}
+      local author_specs = {}
+      local text_words = {}
 
-    for _, w in ipairs(words) do
-      local lang_info = LANG_TOKENS[w:lower()]
-      local vis_info = VISIBILITY_TOKENS[w:lower()]
-      local author_info = get_author_token(w, st)
-      if lang_info then
-        lang_specs[#lang_specs + 1] = lang_info.name:lower()
-      elseif vis_info then
-        vis_specs[#vis_specs + 1] = vis_info.type
-      elseif author_info then
-        author_specs[#author_specs + 1] = author_info.clean
-      else
-        text_words[#text_words + 1] = w:lower()
+      for _, w in ipairs(words) do
+        local lang_info = LANG_TOKENS[w:lower()]
+        local vis_info = VISIBILITY_TOKENS[w:lower()]
+        local author_info = get_author_token(w, st)
+        if lang_info then
+          lang_specs[#lang_specs + 1] = lang_info.name:lower()
+        elseif vis_info then
+          vis_specs[#vis_specs + 1] = vis_info.type
+        elseif author_info then
+          author_specs[#author_specs + 1] = author_info.clean
+        else
+          text_words[#text_words + 1] = w:lower()
+        end
       end
-    end
 
-    local text_q = table.concat(text_words, " ")
+      local text_q = table.concat(text_words, " ")
 
-    local function project_has_language(it, req_lang_name)
-      if not it then return false end
-      local req_lower = req_lang_name:lower()
+      local function project_has_language(it, req_lang_name)
+        if not it then return false end
+        local req_lower = req_lang_name:lower()
 
-      -- 1. Check it.languages list (exact language name match)
-      if it.languages and #it.languages > 0 then
-        for _, l in ipairs(it.languages) do
-          if l.name and l.name:lower() == req_lower then
+        -- 1. Check it.languages list (exact language name match)
+        if it.languages and #it.languages > 0 then
+          for _, l in ipairs(it.languages) do
+            if l.name and l.name:lower() == req_lower then
+              return true
+            end
+          end
+        end
+
+        -- 2. Check it.type (exact type match and platform type inferences)
+        if it.type then
+          local t_lower = it.type:lower()
+          if t_lower == req_lower then
+            return true
+          end
+          if t_lower == "node" and (req_lower == "javascript" or req_lower == "typescript") then
+            return true
+          elseif t_lower == "web" and (req_lower == "html" or req_lower == "css" or req_lower == "javascript") then
+            return true
+          elseif t_lower == "android" and (req_lower == "kotlin" or req_lower == "java") then
+            return true
+          elseif t_lower == "ios" and req_lower == "swift" then
             return true
           end
         end
+
+        -- 3. Check whole word match in it.search with frontier pattern
+        if it.search then
+          local s_lower = it.search:lower()
+          local pattern = "%f[%a]" .. vim.pesc(req_lower) .. "%f[%A]"
+          if s_lower:match(pattern) then
+            return true
+          end
+        end
+
+        return false
       end
 
-      -- 2. Check it.type (exact type match and platform type inferences)
-      if it.type then
-        local t_lower = it.type:lower()
-        if t_lower == req_lower then
-          return true
+      local function project_has_author(it, req_author_clean)
+        if not it then return false end
+
+        -- 1. Check GitHub repo owner
+        local gh_meta = P.get_github_meta(it.path)
+        if gh_meta and gh_meta.owner then
+          local o_clean = gh_meta.owner:lower():gsub("[%s%-_%./\\]", "")
+          if o_clean == req_author_clean or o_clean:find(req_author_clean, 1, true) or req_author_clean:find(o_clean, 1, true) then
+            return true
+          end
         end
-        if t_lower == "node" and (req_lower == "javascript" or req_lower == "typescript") then
-          return true
-        elseif t_lower == "web" and (req_lower == "html" or req_lower == "css" or req_lower == "javascript") then
-          return true
-        elseif t_lower == "android" and (req_lower == "kotlin" or req_lower == "java") then
-          return true
-        elseif t_lower == "ios" and req_lower == "swift" then
-          return true
+
+        -- 2. Check GitHub repo parent (fork origin)
+        if gh_meta and gh_meta.parent then
+          local p_clean = gh_meta.parent:lower():gsub("[%s%-_%./\\]", "")
+          if p_clean:find(req_author_clean, 1, true) then
+            return true
+          end
         end
-      end
 
-      -- 3. Check whole word match in it.search with frontier pattern
-      if it.search then
-        local s_lower = it.search:lower()
-        local pattern = "%f[%a]" .. vim.pesc(req_lower) .. "%f[%A]"
-        if s_lower:match(pattern) then
-          return true
+        -- 3. Check me.owners on personal / local git repos
+        local me_owners = (config.options and config.options.me and config.options.me.owners) or {}
+        local is_user_author = false
+        for _, o in ipairs(me_owners) do
+          if o:lower():gsub("[%s%-_%./\\]", "") == req_author_clean then
+            is_user_author = true
+            break
+          end
         end
-      end
 
-      return false
-    end
-
-    local function project_has_author(it, req_author_clean)
-      if not it then return false end
-
-      -- 1. Check GitHub repo owner
-      local gh_meta = P.get_github_meta(it.path)
-      if gh_meta and gh_meta.owner then
-        local o_clean = gh_meta.owner:lower():gsub("[%s%-_%./\\]", "")
-        if o_clean == req_author_clean or o_clean:find(req_author_clean, 1, true) or req_author_clean:find(o_clean, 1, true) then
-          return true
+        if is_user_author and (it.git and not it.git.none) then
+          if not gh_meta or not gh_meta.owner or gh_meta.owner:lower() == "phantumblade" then
+            return true
+          end
         end
-      end
 
-      -- 2. Check GitHub repo parent (fork origin)
-      if gh_meta and gh_meta.parent then
-        local p_clean = gh_meta.parent:lower():gsub("[%s%-_%./\\]", "")
-        if p_clean:find(req_author_clean, 1, true) then
-          return true
-        end
-      end
-
-      -- 3. Check me.owners on personal / local git repos
-      local me_owners = (config.options and config.options.me and config.options.me.owners) or {}
-      local is_user_author = false
-      for _, o in ipairs(me_owners) do
-        if o:lower():gsub("[%s%-_%./\\]", "") == req_author_clean then
-          is_user_author = true
-          break
-        end
-      end
-
-      if is_user_author and (it.git and not it.git.none) then
-        if not gh_meta or not gh_meta.owner or gh_meta.owner:lower() == "phantumblade" then
-          return true
-        end
-      end
-
-      -- 4. Check git commit authors (shortlog / commit details)
-      if it.git and not it.git.none then
-        local _, stats = P.get_commit_details(it.path, 50)
-        if stats and #stats > 0 then
-          for _, st_author in ipairs(stats) do
-            local a_clean = st_author.name:lower():gsub("[%s%-_%./\\]", "")
+        -- 4. Check git commit authors in-memory (0 disk reads, 0 child processes)
+        if it.authors then
+          for a_clean, _ in pairs(it.authors) do
             if a_clean == req_author_clean or a_clean:find(req_author_clean, 1, true) or req_author_clean:find(a_clean, 1, true) then
               return true
             end
           end
         end
+
+        return false
       end
 
-      return false
-    end
-
-    local scored_matches = {}
-    for _, it in ipairs(st.all) do
-      local matches_filters = true
-      if #lang_specs > 0 then
-        for _, req_lang in ipairs(lang_specs) do
-          if not project_has_language(it, req_lang) then
-            matches_filters = false
-            break
-          end
-        end
-      end
-
-      if matches_filters and #author_specs > 0 then
-        for _, req_auth in ipairs(author_specs) do
-          if not project_has_author(it, req_auth) then
-            matches_filters = false
-            break
-          end
-        end
-      end
-
-      if matches_filters and #vis_specs > 0 then
-        local gh_meta = P.get_github_meta(it.path)
-        for _, req_vis in ipairs(vis_specs) do
-          local is_priv = (gh_meta and gh_meta.is_private == true) or (it.is_private == true) or (it.visibility == "PRIVATE")
-          local is_pub = (gh_meta and gh_meta.is_private == false) or (it.is_private == false) or (it.visibility == "PUBLIC")
-          local is_loc = (not gh_meta) or (it.git and it.git.none == true)
-
-          if req_vis == "public" and not is_pub then matches_filters = false end
-          if req_vis == "private" and not is_priv then matches_filters = false end
-          if req_vis == "local" and not is_loc then matches_filters = false end
-        end
-      end
-
-      if matches_filters then
-        if #text_words > 0 then
-          local name_lower = tostring(it.name or ""):lower()
-          local dir_lower = tostring(it.dir or ""):lower()
-          local search_lower = tostring(it.search or ""):lower()
-          local score = 0
-
-          if name_lower == text_q then
-            score = 2000
-          elseif name_lower:sub(1, #text_q) == text_q then
-            score = 1500
-          elseif name_lower:find(text_q, 1, true) then
-            score = 1000
-          elseif dir_lower:find(text_q, 1, true) then
-            score = 500
-          elseif search_lower:find(text_q, 1, true) then
-            score = 100
-          else
-            local ok_name, f_name = pcall(vim.fn.matchfuzzy, { it.name }, text_q)
-            local ok_search, f_search = pcall(vim.fn.matchfuzzy, { it.search }, text_q)
-            if ok_name and f_name and #f_name > 0 then
-              score = 80
-            elseif ok_search and f_search and #f_search > 0 then
-              score = 20
+      local scored_matches = {}
+      for _, it in ipairs(st.all) do
+        local matches_filters = true
+        if #lang_specs > 0 then
+          for _, req_lang in ipairs(lang_specs) do
+            if not project_has_language(it, req_lang) then
+              matches_filters = false
+              break
             end
           end
+        end
 
-          if score > 0 then
-            if it.mine then score = score + 50 end
+        if matches_filters and #author_specs > 0 then
+          for _, req_auth in ipairs(author_specs) do
+            if not project_has_author(it, req_auth) then
+              matches_filters = false
+              break
+            end
+          end
+        end
+
+        if matches_filters and #vis_specs > 0 then
+          local gh_meta = P.get_github_meta(it.path)
+          for _, req_vis in ipairs(vis_specs) do
+            local is_priv = (gh_meta and gh_meta.is_private == true) or (it.is_private == true) or (it.visibility == "PRIVATE")
+            local is_pub = (gh_meta and gh_meta.is_private == false) or (it.is_private == false) or (it.visibility == "PUBLIC")
+            local is_loc = (not gh_meta) or (it.git and it.git.none == true)
+
+            if req_vis == "public" and not is_pub then matches_filters = false end
+            if req_vis == "private" and not is_priv then matches_filters = false end
+            if req_vis == "local" and not is_loc then matches_filters = false end
+          end
+        end
+
+        if matches_filters then
+          if #text_words > 0 then
+            local name_lower = tostring(it.name or ""):lower()
+            local dir_lower = tostring(it.dir or ""):lower()
+            local search_lower = tostring(it.search or ""):lower()
+            local score = 0
+
+            if name_lower == text_q then
+              score = 2000
+            elseif name_lower:sub(1, #text_q) == text_q then
+              score = 1500
+            elseif name_lower:find(text_q, 1, true) then
+              score = 1000
+            elseif dir_lower:find(text_q, 1, true) then
+              score = 500
+            elseif search_lower:find(text_q, 1, true) then
+              score = 100
+            else
+              local ok_name, f_name = pcall(vim.fn.matchfuzzy, { it.name }, text_q)
+              local ok_search, f_search = pcall(vim.fn.matchfuzzy, { it.search }, text_q)
+              if ok_name and f_name and #f_name > 0 then
+                score = 80
+              elseif ok_search and f_search and #f_search > 0 then
+                score = 20
+              end
+            end
+
+            if score > 0 then
+              if it.mine then score = score + 50 end
+              scored_matches[#scored_matches + 1] = { item = it, score = score }
+            end
+          else
+            local score = it.mine and 100 or 10
             scored_matches[#scored_matches + 1] = { item = it, score = score }
           end
-        else
-          local score = it.mine and 100 or 10
-          scored_matches[#scored_matches + 1] = { item = it, score = score }
         end
       end
+
+      table.sort(scored_matches, function(a, b)
+        return a.score > b.score
+      end)
+
+      local res = {}
+      for _, sm in ipairs(scored_matches) do
+        res[#res + 1] = sm.item
+      end
+      st.items = res
     end
 
-    table.sort(scored_matches, function(a, b)
-      return a.score > b.score
-    end)
-
-    local res = {}
-    for _, sm in ipairs(scored_matches) do
-      res[#res + 1] = sm.item
-    end
-    st.items = res
+    st.sel = 1
+    refresh(st)
   end
 
-  st.sel = 1
-  refresh(st)
+  if immediate then
+    if st.filter_debounce_timer then
+      pcall(function() st.filter_debounce_timer:stop(); st.filter_debounce_timer:close() end)
+      st.filter_debounce_timer = nil
+    end
+    apply_filter()
+    return
+  end
+
+  if st.filter_debounce_timer then
+    pcall(function() st.filter_debounce_timer:stop(); st.filter_debounce_timer:close() end)
+    st.filter_debounce_timer = nil
+  end
+
+  local d_timer = (vim.uv or vim.loop).new_timer()
+  st.filter_debounce_timer = d_timer
+  d_timer:start(100, 0, vim.schedule_wrap(function()
+    if not closed then
+      apply_filter()
+    end
+    pcall(function() d_timer:stop(); d_timer:close() end)
+    if st.filter_debounce_timer == d_timer then st.filter_debounce_timer = nil end
+  end))
 end
 
 reapply = function(st)
@@ -3118,7 +3141,7 @@ function M.open()
       vim.api.nvim_buf_set_lines(st.input.buf, 0, 1, false, { new_line })
       pcall(vim.api.nvim_win_set_cursor, st.input.win, { 1, new_col })
       st.ghost_suggestion = nil
-      filter(st)
+      filter(st, true)
       return
     end
     move(st, 1)
