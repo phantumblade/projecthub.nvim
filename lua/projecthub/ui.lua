@@ -1907,14 +1907,22 @@ render_preview = function(st)
 
 
   local p = st.items[st.sel]
-  if not (p and vim.api.nvim_win_is_valid(st.preview.win)) then return end
+  if not (p and vim.api.nvim_win_is_valid(st.preview.win)) then
+    clear_kitty_graphics()
+    return
+  end
 
   if st.web_preview_mode then
     local html_file = P.get_html_preview_file(p.path)
     if html_file then
       render_web_preview_in_box(st, p, vim.api.nvim_win_get_width(st.preview.win))
       return
+    else
+      st.web_preview_mode = false
+      clear_kitty_graphics()
     end
+  else
+    clear_kitty_graphics()
   end
 
   if p.is_missing then
@@ -2011,6 +2019,7 @@ render_preview = function(st)
     return
   end
 
+  clear_kitty_graphics()
   local readme = P.readme_path(p.path)
   local title = ""
   local buf
@@ -2541,8 +2550,15 @@ move = function(st, delta)
   local old_sel = st.sel
   st.sel = math.min(#st.items, math.max(1, st.sel + delta))
   if st.sel ~= old_sel then
-    st.commit_limit = 100
     local new_p = st.items[st.sel]
+    if new_p then
+      local html_file = P.get_html_preview_file(new_p.path)
+      if not html_file then
+        st.web_preview_mode = false
+      end
+    end
+    clear_kitty_graphics()
+    st.commit_limit = 100
     if new_p then
       local commits = P.get_commit_details(new_p.path, 1)
       if #commits == 0 then
@@ -2554,6 +2570,7 @@ move = function(st, delta)
 end
 
 filter = function(st, immediate)
+  clear_kitty_graphics()
   local q = vim.api.nvim_buf_get_lines(st.input.buf, 0, 1, false)[1] or ""
 
   local changed = false
@@ -3558,6 +3575,8 @@ function M.open()
       local idx = card_at_mouse(st)
       if idx and idx ~= st.sel then
         st.sel = idx
+        st.web_preview_mode = false
+        clear_kitty_graphics()
         refresh(st)
       end
     elseif m.winid == st.preview.win or m.winid == st.preview.sb_win then
