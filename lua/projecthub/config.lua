@@ -39,7 +39,7 @@ M.defaults = {
   -- Effetti sonori dell'interfaccia (libreria uisfx - preset minimal).
   sound = {
     enabled = true, -- true per attivare i suoni, false per disattivarli
-    volume = 0.5,   -- volume da 0.0 a 1.0
+    volume = 0.40,  -- volume morbido e bilanciato da 0.0 a 1.0
   },
 
   -- Callback invocata quando apri un progetto (tasto Enter). Riceve il
