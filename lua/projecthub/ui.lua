@@ -2863,7 +2863,6 @@ function M.open()
     vim.notify(i18n.t("notify_no_projects"), vim.log.levels.WARN)
     return
   end
-  sound.play("open")
 
   local TW = math.floor(vim.o.columns * M.config.width)
   local TH = math.floor((vim.o.lines - 2) * M.config.height)
