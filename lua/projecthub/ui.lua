@@ -7,6 +7,7 @@ local sound = require("projecthub.sound")
 
 local ICON_ERROR = "\u{f0156}"
 local ICON_SUCCESS = "\u{f012c}"
+local ICON_WARN = "\u{f0028}"
 local ICON_GLOBE = "\u{f059f}"
 local ICON_LOCK = "\u{f033e}"
 local ICON_DOC = "\u{f0219}"
@@ -3302,7 +3303,7 @@ function M.open()
       local gh_url = P.get_github_url(p.path)
       if gh_url and gh_url ~= "" then
         sound.play("open")
-        vim.notify(ICON_GLOBE .. " " .. i18n.t("notify_opening_github", gh_url), vim.log.levels.INFO)
+        vim.notify(ICON_GLOBE .. " " .. i18n.t("notify_opening_github", gh_url), vim.log.levels.INFO, { title = "ProjectHub" })
         if vim.ui and vim.ui.open then
           vim.ui.open(gh_url)
         else
@@ -3310,7 +3311,7 @@ function M.open()
         end
       else
         sound.play("error")
-        vim.notify(ICON_ERROR .. " " .. i18n.t("notify_no_github"), vim.log.levels.WARN)
+        vim.notify(ICON_WARN .. " " .. i18n.t("notify_no_github"), vim.log.levels.WARN, { title = "ProjectHub" })
       end
     end
   end)
@@ -3325,9 +3326,10 @@ function M.open()
         if P.is_project(target_path) then
           sound.play("error")
           vim.notify(
-            ICON_SUCCESS .. " " .. i18n.t("notify_already_registered_title")
+            ICON_WARN .. " " .. i18n.t("notify_already_registered_title")
               .. "\n" .. i18n.t("notify_already_registered_body", vim.fn.fnamemodify(target_path, ":t")),
-            vim.log.levels.WARN
+            vim.log.levels.WARN,
+            { title = "ProjectHub" }
           )
           return
         else
@@ -3341,7 +3343,8 @@ function M.open()
             vim.notify(
               ICON_SUCCESS .. " " .. i18n.t("notify_reconnected_title")
                 .. "\n" .. i18n.t("notify_reconnected_body", old_p.name, target_path),
-              vim.log.levels.INFO
+              vim.log.levels.INFO,
+              { title = "ProjectHub" }
             )
           else
             sound.play("error")
@@ -3349,7 +3352,8 @@ function M.open()
             vim.notify(
               ICON_ERROR .. " " .. i18n.t("notify_reconnect_failed_title", fail_title)
                 .. "\n" .. i18n.t("notify_reconnect_failed_body", fail_body),
-              vim.log.levels.ERROR
+              vim.log.levels.ERROR,
+              { title = "ProjectHub" }
             )
           end
 
@@ -3369,13 +3373,13 @@ function M.open()
       if ok then
         sound.play("success")
         P.add_recent(target_path)
-        vim.notify(ICON_SUCCESS .. " " .. res_title .. "\n" .. res_body, vim.log.levels.INFO)
+        vim.notify(ICON_SUCCESS .. " " .. res_title .. "\n" .. res_body, vim.log.levels.INFO, { title = "ProjectHub" })
       else
         sound.play("error")
         if code == "already_registered" then
-          vim.notify(ICON_SUCCESS .. " " .. res_title .. "\n" .. res_body, vim.log.levels.WARN)
+          vim.notify(ICON_WARN .. " " .. res_title .. "\n" .. res_body, vim.log.levels.WARN, { title = "ProjectHub" })
         else
-          vim.notify(ICON_ERROR .. " " .. i18n.t("notify_op_failed_title", res_title) .. "\n" .. i18n.t("notify_op_failed_body", res_body), vim.log.levels.ERROR)
+          vim.notify(ICON_ERROR .. " " .. i18n.t("notify_op_failed_title", res_title) .. "\n" .. i18n.t("notify_op_failed_body", res_body), vim.log.levels.ERROR, { title = "ProjectHub" })
         end
       end
 
@@ -3401,7 +3405,7 @@ function M.open()
       sound.play("delete")
       P.remove_recent(p.path)
       P.remove_custom_extra(p.path)
-      vim.notify(ICON_SUCCESS .. " " .. i18n.t("notify_removed_title") .. "\n" .. i18n.t("notify_removed_body", p.name), vim.log.levels.INFO)
+      vim.notify(ICON_SUCCESS .. " " .. i18n.t("notify_removed_title") .. "\n" .. i18n.t("notify_removed_body", p.name), vim.log.levels.INFO, { title = "ProjectHub" })
       st.all = P.list(true)
       filter(st)
       P.load_git(st.all, function() render_list(st) end, true)
@@ -3434,7 +3438,7 @@ function M.open()
     if st.dir_picker_mode then return end
     sound.play("toggle")
     config.options.language = (i18n.get_lang() == "it") and "en" or "it"
-    vim.notify(i18n.t("notify_lang_switched"), vim.log.levels.INFO)
+    vim.notify(i18n.t("notify_lang_switched"), vim.log.levels.INFO, { title = "ProjectHub" })
     M.refresh()
   end)
 
@@ -3453,11 +3457,11 @@ function M.open()
       if input ~= nil and vim.trim(input) ~= "" then
         P.save_note(p.path, vim.trim(input))
         sound.play("checkpoint")
-        vim.notify(ICON_SUCCESS .. " " .. i18n.t("notify_note_saved", p.name), vim.log.levels.INFO)
+        vim.notify(ICON_SUCCESS .. " " .. i18n.t("notify_note_saved", p.name), vim.log.levels.INFO, { title = "ProjectHub" })
       elseif input == "" then
         P.save_note(p.path, "")
         sound.play("delete")
-        vim.notify(ICON_ERROR .. " " .. i18n.t("notify_note_removed", p.name), vim.log.levels.WARN)
+        vim.notify(ICON_WARN .. " " .. i18n.t("notify_note_removed", p.name), vim.log.levels.WARN, { title = "ProjectHub" })
       end
       st.inspector_mode = true
       refresh(st)
