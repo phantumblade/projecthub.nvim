@@ -387,9 +387,15 @@ local function ago(dir)
   local d = math.floor((os.time() - st.mtime.sec) / 86400)
   if d <= 0 then return i18n.t("today") end
   if d == 1 then return i18n.t("yesterday") end
-  if d < 30 then return i18n.t("days_ago", d) end
-  if d < 365 then return i18n.t("months_ago", math.floor(d / 30)) end
-  return i18n.t("years_ago", math.floor(d / 365))
+  if d < 30 then return (d == 1) and i18n.t("day_ago") or i18n.t("days_ago", d) end
+  if d < 365 then
+    local m = math.floor(d / 30)
+    if m <= 1 then return i18n.t("month_ago") end
+    return i18n.t("months_ago", m)
+  end
+  local y = math.floor(d / 365)
+  if y <= 1 then return i18n.t("year_ago") end
+  return i18n.t("years_ago", y)
 end
 
 local function remote_owner(dir)

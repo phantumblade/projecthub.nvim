@@ -1373,8 +1373,10 @@ local function render_inspector(st)
       add("   └" .. string.rep("─", inner_w + 4) .. "┘", "ProjectsHeaderMissing")
     else
       if p.loc_lines then
-        add("   " .. ICON_DOC .. " " .. i18n.t("loc_lines", fmt_num(p.loc_lines)), "ProjectsGitBranch")
-        add("   " .. ICON_FOLDER .. " " .. i18n.t("loc_files", fmt_num(p.loc_files)), "ProjectsGitBranch")
+        local l_str = (p.loc_lines == 1) and i18n.t("loc_lines_1") or i18n.t("loc_lines", fmt_num(p.loc_lines))
+        local f_str = (p.loc_files == 1) and i18n.t("loc_files_1") or i18n.t("loc_files", fmt_num(p.loc_files))
+        add("   " .. ICON_DOC .. " " .. l_str, "ProjectsGitBranch")
+        add("   " .. ICON_FOLDER .. " " .. f_str, "ProjectsGitBranch")
       else
         add("   " .. ICON_DOC .. " " .. i18n.t("loc_calculating_lines"), "ProjectsDesc")
         add("   " .. ICON_FOLDER .. " " .. i18n.t("loc_calculating_files"), "ProjectsDesc")
@@ -1382,15 +1384,16 @@ local function render_inspector(st)
 
       local branch_str = (p.git and p.git.branch) and ("[" .. tostring(p.git.branch) .. "]") or "[main]"
       local git_num_commits = (p.git and p.git.commits) and tostring(p.git.commits) or "0"
-      local git_history_text = p.git and i18n.t("git_history_commits_branch", git_num_commits, branch_str) or i18n.t("not_tracked")
+      local git_history_text = p.git and ((git_num_commits == "1") and i18n.t("commits_1", branch_str) or i18n.t("git_history_commits_branch", git_num_commits, branch_str)) or i18n.t("not_tracked")
       add("   " .. ICON_GIT .. " " .. i18n.t("git_history", git_history_text), "ProjectsGitStaged")
       add("   " .. ICON_CLOCK .. " " .. i18n.t("last_modified", tostring(p.ago or i18n.t("unknown"))), "ProjectsMeta")
     end
   end
 
-    if author_stats and #author_stats > 1 then
+  if author_stats and #author_stats > 1 then
     add("")
-    add("  \u{f0849} " .. i18n.t("team", #author_stats), "ProjectsName")
+    local team_title = (#author_stats == 1) and i18n.t("team_1") or i18n.t("team", #author_stats)
+    add("  \u{f0849} " .. team_title, "ProjectsName")
 
     local tot_c = 0
     for _, ast in ipairs(author_stats) do
@@ -1428,7 +1431,8 @@ local function render_inspector(st)
     end
 
     if not st.show_all_commits and #author_stats > 3 then
-      local a_more = "   " .. i18n.t("team_more", #author_stats - 3)
+      local diff_authors = #author_stats - 3
+      local a_more = "   " .. ((diff_authors == 1) and i18n.t("team_more_1") or i18n.t("team_more", diff_authors))
       add(a_more, "ProjectsMeta")
       local l_idx = #lines - 1
       local c_marker = i18n.t("press_c")
@@ -1545,7 +1549,8 @@ local function render_inspector(st)
       end
 
       if #commits > 5 then
-        local c_more = "   " .. i18n.t("commits_more", #commits - 5)
+        local diff_c = #commits - 5
+        local c_more = "   " .. ((diff_c == 1) and i18n.t("commits_more_1") or i18n.t("commits_more", diff_c))
         add(c_more, "ProjectsMeta")
         local l_idx = #lines - 1
         local c_marker = i18n.t("press_c")
@@ -1650,7 +1655,16 @@ local function render_inspector(st)
       local c_cnt = #clean_n
       local w_cnt = 0
       for _ in clean_n:gmatch("%S+") do w_cnt = w_cnt + 1 end
-      local stats_str = i18n.t("notes_stats", w_cnt, c_cnt)
+      local stats_str = ""
+      if w_cnt == 1 and c_cnt == 1 then
+        stats_str = i18n.t("notes_stats_1_1")
+      elseif w_cnt == 1 then
+        stats_str = i18n.t("notes_stats_1_n", c_cnt)
+      elseif c_cnt == 1 then
+        stats_str = i18n.t("notes_stats_n_1", w_cnt)
+      else
+        stats_str = i18n.t("notes_stats", w_cnt, c_cnt)
+      end
       add_box_row(stats_str, "ProjectsMeta", true)
     end
 
@@ -1803,8 +1817,10 @@ render_preview = function(st)
     local pw = vim.api.nvim_win_is_valid(st.preview.win) and vim.api.nvim_win_get_width(st.preview.win) or 50
     local ph = vim.api.nvim_win_is_valid(st.preview.win) and vim.api.nvim_win_get_height(st.preview.win) or 20
 
-    add("   " .. ICON_FOLDER .. " " .. i18n.t("dirpicker_subdirs", fmt_num(sub_dirs_cnt)), "ProjectsGitBranch")
-    add("   " .. ICON_DOC .. " " .. i18n.t("dirpicker_files", fmt_num(files_cnt)), "ProjectsGitBranch")
+    local s_sub = (sub_dirs_cnt == 1) and i18n.t("dirpicker_subdirs_1") or i18n.t("dirpicker_subdirs", fmt_num(sub_dirs_cnt))
+    local s_fil = (files_cnt == 1) and i18n.t("dirpicker_files_1") or i18n.t("dirpicker_files", fmt_num(files_cnt))
+    add("   " .. ICON_FOLDER .. " " .. s_sub, "ProjectsGitBranch")
+    add("   " .. ICON_DOC .. " " .. s_fil, "ProjectsGitBranch")
     -- Vertical centering for Callout Box inside preview panel
     local cur_cnt = #lines
     local top_pad_lines = math.max(2, math.floor((ph - cur_cnt - 3) / 2))

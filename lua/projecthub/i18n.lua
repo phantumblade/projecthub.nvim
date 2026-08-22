@@ -25,8 +25,13 @@ M.locales = {
     unknown = "sconosciuta",
     today = "oggi",
     yesterday = "ieri",
+    day_ago = "1 giorno fa",
     days_ago = "%d giorni fa",
+    week_ago = "1 settimana fa",
+    weeks_ago = "%d settimane fa",
+    month_ago = "1 mese fa",
     months_ago = "%d mesi fa",
+    year_ago = "1 anno fa",
     years_ago = "%d anni fa",
     missing_type = "Mancante",
     missing_desc = "Percorso non trovato sul disco.",
@@ -66,20 +71,26 @@ M.locales = {
     title_reconnect = " Riconnetti '%s'  %s ",
 
     overview = "PANORAMICA",
+    loc_lines_1 = "Righe di Codice:    1 riga totale",
     loc_lines = "Righe di Codice:    %s righe totali",
+    loc_files_1 = "File Sorgente:      1 file di progetto",
     loc_files = "File Sorgente:      %s file di progetto",
     loc_calculating_lines = "Righe di Codice:    (calcolo in corso...)",
     loc_calculating_files = "File Sorgente:      (calcolo in corso...)",
     git_history = "Cronologia Git:      %s",
+    commits_1 = "1 commit %s",
     git_history_commits_branch = "%s commit %s",
     git_history_none = "non tracciato",
     last_modified = "Ultima Modifica:     %s",
+    team_1 = "TEAM & COLLABORATORI  (1 sviluppatore)",
     team = "TEAM & COLLABORATORI  (%d sviluppatori)",
+    team_more_1 = "... un altro sviluppatore (Premi c per la lista completa)",
     team_more = "... altri %d sviluppatori (Premi c per la lista completa)",
     commit_stat = "%d commit (%d%%)",
     commits_full = "CRONOLOGIA COMMIT GIT COMPLETA  (%d commit totali - Premi 'c' per comprimere)",
     commits_recent = "CRONOLOGIA COMMIT GIT  (I 5 commit più recenti)",
     commits_none = "(nessun commit git nel repository)",
+    commits_more_1 = "... 1 altro commit (Premi c per la cronologia completa)",
     commits_more = "... altri %d commit (Premi c per la cronologia completa)",
     commits_load_more = "... mostrati %d commit su %s (Premi 'm' per caricarne altri 100)",
     press_c = "Premi c",
@@ -88,6 +99,9 @@ M.locales = {
     notes_empty_1 = "Nessuna nota memorizzata per questo progetto.",
     notes_empty_2 = "Gli appunti sono locali e non occupano spazio nel repository.",
     notes_hint = "Premi n per aggiungere un appunto",
+    notes_stats_1_1 = "1 parola  •  1 carattere",
+    notes_stats_1_n = "1 parola  •  %d caratteri",
+    notes_stats_n_1 = "%d parole  •  1 carattere",
     notes_stats = "%d parole  •  %d caratteri",
     missing_box_title = "CARTELLA SPOSTATA O ELIMINATA",
     missing_box_line1 = "La cartella di questo progetto non è più presente",
@@ -104,7 +118,9 @@ M.locales = {
 
     dirpicker_title = "ISPETTORE CARTELLA",
     dirpicker_path = "Percorso: %s",
+    dirpicker_subdirs_1 = "Sotto-cartelle:  1 cartella",
     dirpicker_subdirs = "Sotto-cartelle:  %s cartelle",
+    dirpicker_files_1 = "File Contenuti:  1 file",
     dirpicker_files = "File Contenuti:  %s file",
     dirpicker_already = "'%s' È GIÀ UN PROGETTO REGISTRATO",
     dirpicker_add = "PREMI  a  PER AGGIUNGERE '%s' COME PROGETTO",
@@ -176,8 +192,13 @@ M.locales = {
     unknown = "unknown",
     today = "today",
     yesterday = "yesterday",
+    day_ago = "1 day ago",
     days_ago = "%d days ago",
+    week_ago = "1 week ago",
+    weeks_ago = "%d weeks ago",
+    month_ago = "1 month ago",
     months_ago = "%d months ago",
+    year_ago = "1 year ago",
     years_ago = "%d years ago",
     missing_type = "Missing",
     missing_desc = "Path not found on disk.",
@@ -217,20 +238,26 @@ M.locales = {
     title_reconnect = " Reconnect '%s'  %s ",
 
     overview = "OVERVIEW",
+    loc_lines_1 = "Lines of Code:      1 total line",
     loc_lines = "Lines of Code:      %s total lines",
+    loc_files_1 = "Source Files:       1 project file",
     loc_files = "Source Files:       %s project files",
     loc_calculating_lines = "Lines of Code:      (calculating...)",
     loc_calculating_files = "Source Files:       (calculating...)",
     git_history = "Git History:         %s",
+    commits_1 = "1 commit %s",
     git_history_commits_branch = "%s commits %s",
     git_history_none = "not tracked",
     last_modified = "Last Modified:       %s",
+    team_1 = "TEAM & CONTRIBUTORS  (1 developer)",
     team = "TEAM & CONTRIBUTORS  (%d developers)",
+    team_more_1 = "... 1 more contributor (press c for the full list)",
     team_more = "... %d more contributors (press c for the full list)",
     commit_stat = "%d commits (%d%%)",
     commits_full = "FULL GIT COMMIT HISTORY  (%d total commits - press 'c' to collapse)",
     commits_recent = "GIT COMMIT HISTORY  (5 most recent)",
     commits_none = "(no git commits in this repository)",
+    commits_more_1 = "... 1 more commit (press c for the full history)",
     commits_more = "... %d more commits (press c for the full history)",
     commits_load_more = "... showing %d commits of %s (Press 'm' to load 100 more)",
     press_c = "press c",
@@ -239,6 +266,9 @@ M.locales = {
     notes_empty_1 = "No note saved for this project yet.",
     notes_empty_2 = "Notes are local and don't take up space in the repository.",
     notes_hint = "Press n to add a note",
+    notes_stats_1_1 = "1 word  •  1 character",
+    notes_stats_1_n = "1 word  •  %d characters",
+    notes_stats_n_1 = "%d words  •  1 character",
     notes_stats = "%d words  •  %d characters",
     missing_box_title = "FOLDER MOVED OR DELETED",
     missing_box_line1 = "This project's folder is no longer present",
@@ -255,7 +285,9 @@ M.locales = {
 
     dirpicker_title = "FOLDER INSPECTOR",
     dirpicker_path = "Path: %s",
+    dirpicker_subdirs_1 = "Subfolders:  1 folder",
     dirpicker_subdirs = "Subfolders:  %s folders",
+    dirpicker_files_1 = "Contents:    1 file",
     dirpicker_files = "Contents:    %s files",
     dirpicker_already = "'%s' IS ALREADY A TRACKED PROJECT",
     dirpicker_add = "PRESS  a  TO ADD '%s' AS A PROJECT",
@@ -268,78 +300,86 @@ M.locales = {
     missing_explanation = "This project's folder is no longer present at its originally recorded location on disk.",
     missing_press_keys = "press one of the following keys:",
     missing_btn_reconnect = "Reconnect",
-    missing_btn_remove = "Remove tracking",
+    missing_btn_remove = "Untrack",
 
-    notify_no_projects = "No projects found: check the 'roots' and 'extra' options passed to require('projecthub').setup({...})",
+    notify_no_projects = "No projects found: check 'roots' and 'extra' passed to require('projecthub').setup({...})",
     notify_no_commits = "No Git commits available for '%s'",
-    notify_opening_github = "Opening %s in the browser...",
-    notify_no_github = "This project has no linked Git remote (GitHub / GitLab)",
+    notify_opening_github = "Opening %s in browser...",
+    notify_no_github = "This project has no remote (GitHub / GitLab) repository configured",
     notify_opening_web_preview = "Opening web preview (%s) in browser...",
     notify_no_html = "No HTML file (index.html) found in this project",
-    notify_already_registered_title = "Already Tracked",
-    notify_already_registered_body = "'%s' is already one of your tracked projects.\nPick another folder.",
-    notify_reconnected_title = "Project Reconnected!",
+    notify_already_registered_title = "Already Registered",
+    notify_already_registered_body = "'%s' is already in your projects list.\nPlease choose another directory.",
+    notify_reconnected_title = "Project Reconnected Successfully!",
     notify_reconnected_body = "The new path for '%s' is:\n%s",
-    notify_reconnect_failed_title = "Reconnect Failed: %s",
+    notify_reconnect_failed_title = "Reconnection Failed: %s",
     notify_reconnect_failed_body = "Reason: %s",
     notify_removed_title = "Project Removed",
-    notify_removed_body = "The reference to '%s' was successfully removed from your projects.",
+    notify_removed_body = "The reference to '%s' was removed from your tracked projects.",
     notify_note_saved = "Note for '%s' saved successfully!",
     notify_note_removed = "Note for '%s' removed",
     notify_lang_switched = "Language set to English",
     notify_git_update = "Git activity detected on '%s': status updated!",
-    notify_sound_enabled = "Sound effects enabled",
-    notify_sound_disabled = "Sound effects disabled (Mute)",
+    notify_sound_enabled = "Sound FX enabled",
+    notify_sound_disabled = "Sound FX muted",
     prompt_note = " Note for %s: ",
 
     err_empty_path_title = "Invalid Path",
-    err_empty_path_body = "The given path is empty.",
-    err_not_found_title = "Folder Not Found",
+    err_empty_path_body = "The specified path is empty.",
+    err_not_found_title = "Directory Not Found",
     err_not_found_body = "The path '%s' does not exist on disk.",
-    err_not_dir_title = "Invalid Type",
-    err_not_dir_body = "'%s' is a file, not a folder.",
+    err_not_title = "Invalid Type",
+    err_not_dir_body = "'%s' is a file, not a directory.",
     err_already_title = "Already Tracked",
-    err_already_body = "'%s' is already one of your tracked projects.",
-    err_write_title = "Write Error",
-    err_write_body = "Could not save the configuration.",
+    err_already_body = "'%s' is already in your projects.",
+    err_write_title = "JSON Write Error",
+    err_write_body = "Could not persist configuration.",
     ok_added_title = "Project Added",
-    ok_added_body = "The folder '%s' was successfully registered!",
+    ok_added_body = "The directory '%s' was tracked successfully!",
     notify_op_failed_title = "Operation Failed: %s",
     notify_op_failed_body = "Reason: %s",
   },
 }
 
-function M.detect_system_lang()
-  local env = os.getenv("LANG") or os.getenv("LC_ALL") or os.getenv("LC_MESSAGES") or ""
-  if env:lower():find("^it") then
-    return "it"
-  end
-  return "en"
-end
-
 function M.get_lang()
-  local ok, config = pcall(require, "projecthub.config")
-  local lang = ok and config.options.language or nil
-  if not lang or lang == "auto" then
-    lang = M.detect_system_lang()
+  local ok, cfg = pcall(require, "projecthub.config")
+  if ok and cfg and cfg.options and cfg.options.language then
+    return cfg.options.language
   end
-  if not M.locales[lang] then lang = "en" end
-  return lang
+  return "it"
 end
 
---- Traduce `key` nella lingua corrente. Argomenti extra vengono passati a
---- string.format se la stringa contiene dei segnaposto (%s, %d, ...).
 function M.t(key, ...)
-  local locale = M.locales[M.get_lang()] or M.locales.en
-  local str = locale[key] or M.locales.en[key] or key
+  local lang = M.get_lang()
+  local tbl = M.locales[lang] or M.locales.it
+  local val = tbl[key] or M.locales.it[key] or key
   if select("#", ...) > 0 then
-    local ok, formatted = pcall(string.format, str, ...)
-    if ok then return formatted end
+    local ok, res = pcall(string.format, val, ...)
+    if ok then return res end
   end
-  return str
+  return val
 end
 
---- Converte le date relative di Git (es. "2 minutes ago", "5 hours ago")
+local function translate_unit(n, u)
+  if u:find("^sec") then
+    return "pochi secondi"
+  elseif u:find("^min") then
+    return (n == 1) and "1 minuto" or string.format("%d minuti", n)
+  elseif u:find("^hour") then
+    return (n == 1) and "1 ora" or string.format("%d ore", n)
+  elseif u:find("^day") then
+    return (n == 1) and "1 giorno" or string.format("%d giorni", n)
+  elseif u:find("^week") then
+    return (n == 1) and "1 settimana" or string.format("%d settimane", n)
+  elseif u:find("^month") then
+    return (n == 1) and "1 mese" or string.format("%d mesi", n)
+  elseif u:find("^year") then
+    return (n == 1) and "1 anno" or string.format("%d anni", n)
+  end
+  return string.format("%d %s", n, u)
+end
+
+--- Converte le date relative di Git (es. "2 minutes ago", "5 hours ago", "1 year, 2 months ago")
 --- nella lingua dell'interfaccia corrente.
 function M.format_relative_time(raw_str)
   if not raw_str or raw_str == "" then return "" end
@@ -353,22 +393,17 @@ function M.format_relative_time(raw_str)
     return "pochi secondi fa"
   end
 
-  local num, unit = s:match("^(%d+)%s+([%a]+)%s+ago$")
-  if num and unit then
+  local parts = {}
+  for num, unit in s:gmatch("(%d+)%s+([%a]+)") do
     local n = tonumber(num) or 1
-    if unit:find("^min") then
-      return (n == 1) and "1 minuto fa" or string.format("%d minuti fa", n)
-    elseif unit:find("^hour") then
-      return (n == 1) and "1 ora fa" or string.format("%d ore fa", n)
-    elseif unit:find("^day") then
-      return (n == 1) and "1 giorno fa" or string.format("%d giorni fa", n)
-    elseif unit:find("^week") then
-      return (n == 1) and "1 settimana fa" or string.format("%d settimane fa", n)
-    elseif unit:find("^month") then
-      return (n == 1) and "1 mese fa" or string.format("%d mesi fa", n)
-    elseif unit:find("^year") then
-      return (n == 1) and "1 anno fa" or string.format("%d anni fa", n)
+    parts[#parts + 1] = translate_unit(n, unit)
+  end
+
+  if #parts > 0 then
+    if #parts == 1 and parts[1] == "pochi secondi" then
+      return "pochi secondi fa"
     end
+    return table.concat(parts, " e ") .. " fa"
   end
 
   return raw_str
