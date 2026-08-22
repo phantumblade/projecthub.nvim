@@ -791,23 +791,31 @@ function M.get_commit_details(path, limit, force)
         local is_owner = false
 
         if repo_owner_clean ~= "" then
-          if c_clean == repo_owner_clean then
+          if c_clean == repo_owner_clean or c_clean:find(repo_owner_clean, 1, true) or repo_owner_clean:find(c_clean, 1, true) then
             is_owner = true
           elseif is_my_repo then
-            if local_git_name ~= "" and c_clean == local_git_name then
+            if local_git_name ~= "" and (c_clean == local_git_name or c_clean:find(local_git_name, 1, true)) then
               is_owner = true
             else
               for _, o in ipairs(me_owners) do
-                if c_clean == o:lower():gsub("[%s%-_%.]", "") then is_owner = true; break end
+                local o_clean = o:lower():gsub("[%s%-_%.]", "")
+                if c_clean == o_clean or c_clean:find(o_clean, 1, true) or o_clean:find(c_clean, 1, true) then
+                  is_owner = true
+                  break
+                end
               end
             end
           end
         else
-          if local_git_name ~= "" and c_clean == local_git_name then
+          if local_git_name ~= "" and (c_clean == local_git_name or c_clean:find(local_git_name, 1, true)) then
             is_owner = true
           else
             for _, o in ipairs(me_owners) do
-              if c_clean == o:lower():gsub("[%s%-_%.]", "") then is_owner = true; break end
+              local o_clean = o:lower():gsub("[%s%-_%.]", "")
+              if c_clean == o_clean or c_clean:find(o_clean, 1, true) or o_clean:find(c_clean, 1, true) then
+                is_owner = true
+                break
+              end
             end
           end
         end
@@ -820,6 +828,21 @@ function M.get_commit_details(path, limit, force)
           is_owner = is_owner,
         }
       end
+    end
+
+    -- Se nessun autore corrisponde direttamente al nome owner del remote (es. organizzazione tipo "LazyVim" vs creatore "Folke Lemaitre"),
+    -- il top contributor con più commit (#1) è il proprietario/creatore principale del progetto!
+    local has_any_owner = false
+    for _, ast in ipairs(author_stats) do
+      if ast.is_owner then
+        has_any_owner = true
+        break
+      end
+    end
+    if not has_any_owner and #author_stats > 0 then
+      author_stats[1].is_owner = true
+      local top_clean = author_stats[1].name:lower():gsub("[%s%-_%.]", "")
+      owners_set[top_clean] = true
     end
   end
 
