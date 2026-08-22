@@ -7,6 +7,8 @@ local SOUND_MAP = {
   checkpoint = "checkpoint.mp3",
   snap = "snap.mp3",
   toggle = "toggle-on.mp3",
+  toggle_on = "toggle-on.mp3",
+  toggle_off = "toggle-off.mp3",
   open = "open.mp3",
   error = "error.mp3",
   select = "select.mp3",
@@ -19,9 +21,10 @@ end
 
 --- Riproduce un effetto sonoro in background in modo asincrono (0ms di blocco UI).
 --- @param event string Identificatore del suono ("success", "delete", "connect", "checkpoint", "snap", "toggle", "open", "error", "select")
-function M.play(event)
+--- @param force? boolean Se true, riproduce anche se sound è disabilitato (usato per toggle_off)
+function M.play(event, force)
   local ok, config = pcall(require, "projecthub.config")
-  if ok and config.options and config.options.sound and config.options.sound.enabled == false then
+  if not force and ok and config.options and config.options.sound and config.options.sound.enabled == false then
     return
   end
 
@@ -79,19 +82,21 @@ function M.set_enabled(val)
   end
 end
 
---- Abilita o disabilita il sistema sonoro con notifica Toast e feedback.
+--- Abilita o disabilita il sistema sonoro con notifica Toast e feedback coerente.
 --- @return boolean Nuovo stato abilitato (true / false)
 function M.toggle()
   local current = M.is_enabled()
   local target = not current
-  M.set_enabled(target)
 
   local i18n = require("projecthub.i18n")
   if target then
-    M.play("toggle")
-    vim.notify("  " .. i18n.t("notify_sound_enabled"), vim.log.levels.INFO, { title = "ProjectHub" })
+    M.set_enabled(true)
+    M.play("toggle_on")
+    vim.notify("  " .. i18n.t("notify_sound_enabled"), vim.log.levels.INFO, { title = "Sound FX" })
   else
-    vim.notify("󰝟  " .. i18n.t("notify_sound_disabled"), vim.log.levels.WARN, { title = "ProjectHub" })
+    M.play("toggle_off", true)
+    M.set_enabled(false)
+    vim.notify("󰝟  " .. i18n.t("notify_sound_disabled"), vim.log.levels.WARN, { title = "Sound FX" })
   end
   return target
 end
