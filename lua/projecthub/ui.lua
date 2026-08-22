@@ -36,6 +36,7 @@ local ns_html = vim.api.nvim_create_namespace("projecthub_html")
 local ns_sb = vim.api.nvim_create_namespace("projecthub_scrollbar")
 local ns_psb = vim.api.nvim_create_namespace("projecthub_preview_scrollbar")
 local ns_input = vim.api.nvim_create_namespace("projecthub_input")
+local ns_ghost = vim.api.nvim_create_namespace("projecthub_ghost")
 local CARD_ROWS = 8
 
 M.config = {
@@ -166,7 +167,10 @@ local function set_hl()
     ProjectsGitClean = "DiagnosticOk",
     ProjectsTreeDir = "Directory",
     ProjectsScrollbarThumb = "DiagnosticWarn",
+    ProjectsGhostText = "Comment",
   }
+
+  vim.api.nvim_set_hl(0, "ProjectsGhostText", { fg = "#5c6370", italic = true, default = true })
 
   for from, to in pairs(hl) do
     vim.api.nvim_set_hl(0, from, { link = to, default = true })
@@ -453,6 +457,126 @@ local function get_author_pill_hl(author_name)
   end
   local idx = (h % 6) + 1
   return "ProjectsAuthorPill_" .. idx
+end
+
+local function get_author_token(word, st)
+  if not word or word == "" then return nil end
+  local raw_w = word
+  if raw_w:sub(1, 1) == "@" then
+    raw_w = raw_w:sub(2)
+  end
+  if raw_w == "" then return nil end
+
+  local w_clean = raw_w:lower():gsub("[%s%-_%./\\]", "")
+  local me_owners = (config.options and config.options.me and config.options.me.owners) or {}
+  local is_owner_match = false
+  local matched_name = nil
+
+  -- 1. Check me.owners (e.g. phantumblade, AndreaPerini, Andrea Perini)
+  for _, o in ipairs(me_owners) do
+    local o_clean = o:lower():gsub("[%s%-_%./\\]", "")
+    if o_clean == w_clean then
+      is_owner_match = true
+      matched_name = o
+      break
+    end
+  end
+
+  -- 2. Check local git config user.name
+  if not matched_name then
+    local p_git = io.popen("git config user.name 2>/dev/null")
+    if p_git then
+      local g_out = p_git:read("*a")
+      p_git:close()
+      if g_out and vim.trim(g_out) ~= "" then
+        local g_clean = vim.trim(g_out):lower():gsub("[%s%-_%./\\]", "")
+        if g_clean == w_clean then
+          is_owner_match = true
+          matched_name = vim.trim(g_out)
+        end
+      end
+    end
+  end
+
+  -- 3. Check known repo owners across projects in cache
+  if not matched_name and st and st.all then
+    for _, it in ipairs(st.all) do
+      local meta = P.get_github_meta(it.path)
+      if meta and meta.owner then
+        local o_clean = meta.owner:lower():gsub("[%s%-_%./\\]", "")
+        if o_clean == w_clean then
+          matched_name = meta.owner
+          break
+        end
+      end
+    end
+  end
+
+  -- 4. If word explicitly starts with @ (e.g. @user)
+  if not matched_name and word:sub(1, 1) == "@" then
+    matched_name = raw_w
+  end
+
+  if matched_name then
+    local hl = get_author_pill_hl(matched_name)
+    local display_label = (is_owner_match and "\u{edeb} " or "\u{f0009} ") .. matched_name
+    return {
+      type = "author",
+      author = matched_name,
+      clean = w_clean,
+      name = display_label,
+      hl = hl,
+    }
+  end
+
+  return nil
+end
+
+local function get_token_autocomplete_candidates(st)
+  local list = {}
+  local seen = {}
+
+  local function add(tok, name, hl, typ)
+    local k = tok:lower()
+    if not seen[k] then
+      seen[k] = true
+      list[#list + 1] = { token = k, name = name, hl = hl, type = typ }
+    end
+  end
+
+  -- 1. Language tokens
+  for k, info in pairs(LANG_TOKENS) do
+    add(k, info.name, info.hl, "lang")
+  end
+
+  -- 2. Visibility tokens
+  for k, info in pairs(VISIBILITY_TOKENS) do
+    add(k, info.name, info.hl, "vis")
+  end
+
+  -- 3. Authors
+  local me_owners = (config.options and config.options.me and config.options.me.owners) or {}
+  for _, o in ipairs(me_owners) do
+    add(o, o, get_author_pill_hl(o), "author")
+  end
+
+  if st and st.all then
+    for _, it in ipairs(st.all) do
+      local meta = P.get_github_meta(it.path)
+      if meta and meta.owner then
+        add(meta.owner, meta.owner, get_author_pill_hl(meta.owner), "author")
+      end
+    end
+  end
+
+  table.sort(list, function(a, b)
+    if #a.token ~= #b.token then
+      return #a.token < #b.token
+    end
+    return a.token < b.token
+  end)
+
+  return list
 end
 
 local function join(chunks)
@@ -750,16 +874,20 @@ local function conceal_html_tags(buf)
 end
 
 -- Evidenziazione dinamica con sfondo morbido a pillola tenue (senza quadre '[]')
+-- e Ghost Text (lettere mancanti in grigio per autocompletamento filtri)
 local function highlight_input_languages(st)
   local buf = st.input.buf
   if not (buf and vim.api.nvim_buf_is_valid(buf)) then return end
   vim.api.nvim_buf_clear_namespace(buf, ns_input, 0, -1)
+  vim.api.nvim_buf_clear_namespace(buf, ns_ghost, 0, -1)
+  st.ghost_suggestion = nil
 
   local line = vim.api.nvim_buf_get_lines(buf, 0, 1, false)[1] or ""
   if line == "" then return end
 
+  -- 1. Evidenziazione a pillola SOLO quando la parola è completa
   for start_pos, word in line:gmatch("()(%S+)") do
-    local info = LANG_TOKENS[word:lower()] or VISIBILITY_TOKENS[word:lower()]
+    local info = LANG_TOKENS[word:lower()] or VISIBILITY_TOKENS[word:lower()] or get_author_token(word, st)
     if info then
       local s_idx = start_pos - 1
       local e_idx = s_idx + #word
@@ -768,6 +896,45 @@ local function highlight_input_languages(st)
         hl_group = info.hl,
         priority = 300,
       })
+    end
+  end
+
+  -- 2. Ghost Text: rileva lettere mancanti del filtro in grigio
+  local win = st.input.win
+  if not (win and vim.api.nvim_win_is_valid(win)) then return end
+
+  local mode = vim.api.nvim_get_mode().mode
+  local cur = vim.api.nvim_win_get_cursor(win)
+  local col = cur[2]
+  local check_len = col
+  if mode ~= "i" and check_len < #line then
+    check_len = check_len + 1
+  end
+  local ext_col = math.max(col, check_len)
+  local before_cursor = line:sub(1, ext_col)
+  local cur_word = before_cursor:match("(%S+)$")
+
+  if cur_word and #cur_word >= 1 then
+    local w_low = cur_word:lower()
+    local candidates = get_token_autocomplete_candidates(st)
+
+    for _, cand in ipairs(candidates) do
+      if cand.token:sub(1, #w_low) == w_low and #cand.token > #w_low then
+        local suffix = cand.token:sub(#w_low + 1)
+        st.ghost_suggestion = {
+          prefix = cur_word,
+          completion = cand.token,
+          remaining = suffix,
+          col = ext_col,
+        }
+
+        pcall(vim.api.nvim_buf_set_extmark, buf, ns_ghost, 0, ext_col, {
+          virt_text = { { suffix, "ProjectsGhostText" } },
+          virt_text_pos = "inline",
+          priority = 400,
+        })
+        break
+      end
     end
   end
 end
@@ -2243,7 +2410,7 @@ render_list = function(st, is_marquee_tick)
     local tags_chunks = {}
     for _, w_str in ipairs(words) do
       if w_str ~= "" then
-        local info = LANG_TOKENS[w_str:lower()] or VISIBILITY_TOKENS[w_str:lower()]
+        local info = LANG_TOKENS[w_str:lower()] or VISIBILITY_TOKENS[w_str:lower()] or get_author_token(w_str, st)
         local hl = info and info.hl or "ProjectsName"
         local label = info and info.name or w_str:upper()
         if #tags_chunks > 0 then tags_chunks[#tags_chunks + 1] = { "  " } end
@@ -2302,7 +2469,7 @@ render_list = function(st, is_marquee_tick)
     local formatted_words = {}
     for _, w_str in ipairs(words) do
       if w_str ~= "" then
-        local info = LANG_TOKENS[w_str:lower()] or VISIBILITY_TOKENS[w_str:lower()]
+        local info = LANG_TOKENS[w_str:lower()] or VISIBILITY_TOKENS[w_str:lower()] or get_author_token(w_str, st)
         formatted_words[#formatted_words + 1] = info and info.name or w_str:upper()
       end
     end
@@ -2391,15 +2558,19 @@ filter = function(st)
     local words = vim.split(trimmed, "%s+")
     local lang_specs = {}
     local vis_specs = {}
+    local author_specs = {}
     local text_words = {}
 
     for _, w in ipairs(words) do
       local lang_info = LANG_TOKENS[w:lower()]
       local vis_info = VISIBILITY_TOKENS[w:lower()]
+      local author_info = get_author_token(w, st)
       if lang_info then
         lang_specs[#lang_specs + 1] = lang_info.name:lower()
       elseif vis_info then
         vis_specs[#vis_specs + 1] = vis_info.type
+      elseif author_info then
+        author_specs[#author_specs + 1] = author_info.clean
       else
         text_words[#text_words + 1] = w:lower()
       end
@@ -2449,12 +2620,73 @@ filter = function(st)
       return false
     end
 
+    local function project_has_author(it, req_author_clean)
+      if not it then return false end
+
+      -- 1. Check GitHub repo owner
+      local gh_meta = P.get_github_meta(it.path)
+      if gh_meta and gh_meta.owner then
+        local o_clean = gh_meta.owner:lower():gsub("[%s%-_%./\\]", "")
+        if o_clean == req_author_clean or o_clean:find(req_author_clean, 1, true) or req_author_clean:find(o_clean, 1, true) then
+          return true
+        end
+      end
+
+      -- 2. Check GitHub repo parent (fork origin)
+      if gh_meta and gh_meta.parent then
+        local p_clean = gh_meta.parent:lower():gsub("[%s%-_%./\\]", "")
+        if p_clean:find(req_author_clean, 1, true) then
+          return true
+        end
+      end
+
+      -- 3. Check me.owners on personal / local git repos
+      local me_owners = (config.options and config.options.me and config.options.me.owners) or {}
+      local is_user_author = false
+      for _, o in ipairs(me_owners) do
+        if o:lower():gsub("[%s%-_%./\\]", "") == req_author_clean then
+          is_user_author = true
+          break
+        end
+      end
+
+      if is_user_author and (it.git and not it.git.none) then
+        if not gh_meta or not gh_meta.owner or gh_meta.owner:lower() == "phantumblade" then
+          return true
+        end
+      end
+
+      -- 4. Check git commit authors (shortlog / commit details)
+      if it.git and not it.git.none then
+        local _, stats = P.get_commit_details(it.path, 50)
+        if stats and #stats > 0 then
+          for _, st_author in ipairs(stats) do
+            local a_clean = st_author.name:lower():gsub("[%s%-_%./\\]", "")
+            if a_clean == req_author_clean or a_clean:find(req_author_clean, 1, true) or req_author_clean:find(a_clean, 1, true) then
+              return true
+            end
+          end
+        end
+      end
+
+      return false
+    end
+
     local scored_matches = {}
     for _, it in ipairs(st.all) do
       local matches_filters = true
       if #lang_specs > 0 then
         for _, req_lang in ipairs(lang_specs) do
           if not project_has_language(it, req_lang) then
+            matches_filters = false
+            break
+          end
+        end
+      end
+
+      if matches_filters and #author_specs > 0 then
+        for _, req_auth in ipairs(author_specs) do
+          if not project_has_author(it, req_auth) then
             matches_filters = false
             break
           end
@@ -2871,10 +3103,31 @@ function M.open()
   map(nav_bufs, "i", { "k" }, move_up)
   map(nav_bufs, { "i", "n" }, { "<Right>", "l" }, move_right)
   map(nav_bufs, { "i", "n" }, { "<Left>", "h" }, move_left)
-  map(st.input.buf, "n", { "<Right>" }, move_right)
-  map(st.input.buf, "n", { "<Left>" }, move_left)
-  map(all_bufs, { "i", "n" }, { "<Tab>" }, move_right)
-  map(all_bufs, { "i", "n" }, { "<S-Tab>" }, move_left)
+  local function handle_tab_input()
+    if st.ghost_suggestion and vim.api.nvim_win_is_valid(st.input.win) then
+      local sug = st.ghost_suggestion
+      local line = vim.api.nvim_buf_get_lines(st.input.buf, 0, 1, false)[1] or ""
+      local ext_col = sug.col or #line
+      local prefix_len = #sug.prefix
+      local before = line:sub(1, math.max(0, ext_col - prefix_len))
+      local after = line:sub(ext_col + 1)
+      local completed_token = sug.completion .. " "
+      local new_line = before .. completed_token .. after
+      local new_col = #before + #completed_token
+
+      vim.api.nvim_buf_set_lines(st.input.buf, 0, 1, false, { new_line })
+      pcall(vim.api.nvim_win_set_cursor, st.input.win, { 1, new_col })
+      st.ghost_suggestion = nil
+      filter(st)
+      return
+    end
+    move(st, 1)
+  end
+
+  map(nav_bufs, { "i", "n" }, { "<Tab>" }, move_right)
+  map(nav_bufs, { "i", "n" }, { "<S-Tab>" }, move_left)
+  map(st.input.buf, { "i", "n" }, { "<Tab>" }, handle_tab_input)
+  map(st.input.buf, { "i", "n" }, { "<S-Tab>" }, move_left)
   map(all_bufs, { "i", "n" }, { "<PageDown>" }, function() move(st, st.cols * 3) end)
   map(all_bufs, { "i", "n" }, { "<PageUp>" }, function() move(st, -st.cols * 3) end)
   map(all_bufs, { "i", "n" }, { "<C-f>" }, function() scroll_preview(st, 10) end)
@@ -3281,7 +3534,7 @@ function M.open()
   map(all_bufs, { "i", "n" }, { "<ScrollWheelUp>" }, function() wheel(false) end)
   map(all_bufs, { "i", "n" }, { "<ScrollWheelLeft>", "<ScrollWheelRight>" }, function() end)
 
-  vim.api.nvim_create_autocmd({ "TextChangedI", "TextChanged" }, {
+  vim.api.nvim_create_autocmd({ "TextChangedI", "TextChanged", "CursorMovedI", "CursorMoved" }, {
     buffer = st.input.buf,
     callback = function() filter(st) end,
   })
@@ -3321,6 +3574,28 @@ function M.open()
     end,
   })
   vim.api.nvim_create_autocmd("ColorScheme", { buffer = st.input.buf, callback = set_hl })
+
+  vim.api.nvim_create_autocmd({ "FocusGained", "VimResume" }, {
+    group = grp,
+    callback = function()
+      if closed then return end
+      P.load_git(st.all, function()
+        if not closed then
+          render_list(st)
+          render_preview(st)
+        end
+      end, true)
+
+      local cur_item = st.items[st.sel]
+      if cur_item then
+        P.async_load_github_meta(cur_item.path, function()
+          if not closed and st.items[st.sel] == cur_item then
+            render_preview(st)
+          end
+        end, true)
+      end
+    end,
+  })
 
   vim.api.nvim_create_autocmd("VimResized", {
     group = grp,
