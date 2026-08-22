@@ -519,7 +519,7 @@ local function get_author_token(word, st)
 
   if matched_name then
     local hl = get_author_pill_hl(matched_name)
-    local display_label = (is_owner_match and "\u{edeb} " or "\u{f0009} ") .. matched_name
+    local display_label = "\u{f0009} " .. matched_name
     return {
       type = "author",
       author = matched_name,
@@ -2625,45 +2625,61 @@ filter = function(st, immediate)
       local function project_has_author(it, req_author_clean)
         if not it then return false end
 
-        -- 1. Check GitHub repo owner
-        local gh_meta = P.get_github_meta(it.path)
-        if gh_meta and gh_meta.owner then
-          local o_clean = gh_meta.owner:lower():gsub("[%s%-_%./\\]", "")
-          if o_clean == req_author_clean or o_clean:find(req_author_clean, 1, true) or req_author_clean:find(o_clean, 1, true) then
-            return true
-          end
-        end
-
-        -- 2. Check GitHub repo parent (fork origin)
-        if gh_meta and gh_meta.parent then
-          local p_clean = gh_meta.parent:lower():gsub("[%s%-_%./\\]", "")
-          if p_clean:find(req_author_clean, 1, true) then
-            return true
-          end
-        end
-
-        -- 3. Check me.owners on personal / local git repos
+        -- Raccogli tutti gli alias dell'utente se appartiene a me.owners
+        local target_aliases = { [req_author_clean] = true }
         local me_owners = (config.options and config.options.me and config.options.me.owners) or {}
-        local is_user_author = false
+        local is_me_owner = false
         for _, o in ipairs(me_owners) do
-          if o:lower():gsub("[%s%-_%./\\]", "") == req_author_clean then
-            is_user_author = true
+          local oc = o:lower():gsub("[%s%-_%./\\]", "")
+          if oc == req_author_clean then
+            is_me_owner = true
             break
           end
         end
 
-        if is_user_author and (it.git and not it.git.none) then
-          if not gh_meta or not gh_meta.owner or gh_meta.owner:lower() == "phantumblade" then
-            return true
+        if is_me_owner then
+          for _, o in ipairs(me_owners) do
+            local oc = o:lower():gsub("[%s%-_%./\\]", "")
+            target_aliases[oc] = true
           end
         end
 
-        -- 4. Check git commit authors in-memory (0 disk reads, 0 child processes)
+        -- 1. Controllo Partecipanti / Autori dei Commit (in memoria O(1))
         if it.authors then
           for a_clean, _ in pairs(it.authors) do
-            if a_clean == req_author_clean or a_clean:find(req_author_clean, 1, true) or req_author_clean:find(a_clean, 1, true) then
+            for alias, _ in pairs(target_aliases) do
+              if a_clean == alias or a_clean:find(alias, 1, true) or alias:find(a_clean, 1, true) then
+                return true
+              end
+            end
+          end
+        end
+
+        -- 2. Controllo Proprietario del Repository GitHub (gh_meta.owner)
+        local gh_meta = P.get_github_meta(it.path)
+        if gh_meta and gh_meta.owner then
+          local o_clean = gh_meta.owner:lower():gsub("[%s%-_%./\\]", "")
+          for alias, _ in pairs(target_aliases) do
+            if o_clean == alias or o_clean:find(alias, 1, true) or alias:find(o_clean, 1, true) then
               return true
             end
+          end
+        end
+
+        -- 3. Controllo Repository Parent (se fork di un altro utente)
+        if gh_meta and gh_meta.parent then
+          local p_clean = gh_meta.parent:lower():gsub("[%s%-_%./\\]", "")
+          for alias, _ in pairs(target_aliases) do
+            if p_clean:find(alias, 1, true) then
+              return true
+            end
+          end
+        end
+
+        -- 4. Controllo Repository Personali / Locali con Git
+        if is_me_owner and (it.git and not it.git.none) then
+          if not gh_meta or not gh_meta.owner then
+            return true
           end
         end
 
