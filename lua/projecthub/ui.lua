@@ -2088,19 +2088,31 @@ render_preview = function(st)
       st.preview.buf = vim.api.nvim_create_buf(false, true)
     end
     buf = st.preview.buf
-    vim.bo[buf].modifiable = true
-    vim.bo[buf].readonly = false
 
-    local ok_lines, lines = pcall(vim.fn.readfile, readme)
-    if ok_lines and lines then
-      vim.api.nvim_buf_set_lines(buf, 0, -1, false, lines)
-    else
-      vim.api.nvim_buf_set_lines(buf, 0, -1, false, {})
+    local need_reload = (st.preview_loaded_readme ~= readme) or (vim.bo[buf].filetype ~= "markdown")
+    if need_reload then
+      st.preview_loaded_readme = readme
+      vim.bo[buf].modifiable = true
+      vim.bo[buf].readonly = false
+
+      local ok_lines, lines = pcall(vim.fn.readfile, readme)
+      if ok_lines and lines then
+        vim.api.nvim_buf_set_lines(buf, 0, -1, false, lines)
+      else
+        vim.api.nvim_buf_set_lines(buf, 0, -1, false, {})
+      end
+
+      vim.bo[buf].modifiable = false
+      vim.bo[buf].readonly = true
+      vim.bo[buf].filetype = "markdown"
+
+      conceal_html_tags(buf)
+
+      local ok_rm_ui, rm_ui = pcall(require, "render-markdown.core.ui")
+      if ok_rm_ui and rm_ui.update then
+        pcall(rm_ui.update, buf, st.preview.win)
+      end
     end
-
-    vim.bo[buf].modifiable = false
-    vim.bo[buf].readonly = true
-    vim.bo[buf].filetype = "markdown"
 
     vim.api.nvim_win_set_buf(st.preview.win, buf)
     pcall(vim.api.nvim_set_option_value, "conceallevel", 3, { win = st.preview.win })
@@ -2109,13 +2121,6 @@ render_preview = function(st)
 
     st.preview.shown = buf
     title = vim.fn.fnamemodify(readme, ":t")
-
-    conceal_html_tags(buf)
-
-    local ok_rm_ui, rm_ui = pcall(require, "render-markdown.core.ui")
-    if ok_rm_ui and rm_ui.update then
-      pcall(rm_ui.update, buf, st.preview.win)
-    end
   else
     if not vim.api.nvim_buf_is_valid(st.preview.buf) then
       st.preview.buf = vim.api.nvim_create_buf(false, true)
@@ -2528,9 +2533,18 @@ render_list = function(st, is_marquee_tick)
     lines[#lines + 1] = ""
   end
 
+  local saved_list_view = nil
+  if vim.api.nvim_win_is_valid(win) then
+    saved_list_view = vim.api.nvim_win_call(win, vim.fn.winsaveview)
+  end
+
   vim.bo[st.list.buf].modifiable = true
   vim.api.nvim_buf_set_lines(st.list.buf, 0, -1, false, lines)
   vim.bo[st.list.buf].modifiable = false
+
+  if saved_list_view and vim.api.nvim_win_is_valid(win) then
+    pcall(vim.api.nvim_win_call, win, function() vim.fn.winrestview(saved_list_view) end)
+  end
 
   vim.api.nvim_buf_clear_namespace(st.list.buf, ns, 0, -1)
   for _, hl in ipairs(hls) do
@@ -3740,33 +3754,31 @@ function M.open()
       is_refreshing_git = false
       if not closed then
         local updated_project = nil
+        local any_changed = false
         for _, it in ipairs(st.all) do
           local old = prev_git[it.path]
           if old and it.git and not it.git.none then
             if (it.git.commits or 0) > (old.commits or 0) then
               updated_project = it
-              break
+              any_changed = true
+            elseif (it.git.commits or 0) ~= (old.commits or 0) or (it.git.dirty ~= old.dirty) then
+              any_changed = true
             end
           end
         end
 
         if updated_project then
-          notify(i18n.t("notify_git_update", updated_project.name), nil, vim.log.levels.INFO, ICON_GIT, "snap")
+          notify(i18n.t("notify_git_update", updated_project.name), nil, "snap", "snap")
         end
 
-        render_list(st)
-        render_preview(st)
+        if any_changed then
+          render_list(st)
+          if (st.view_mode or "inspector") == "inspector" then
+            render_preview(st)
+          end
+        end
       end
     end, true)
-
-    local cur_item = st.items[st.sel]
-    if cur_item then
-      P.async_load_github_meta(cur_item.path, function()
-        if not closed and st.items[st.sel] == cur_item then
-          render_preview(st)
-        end
-      end, true)
-    end
   end
 
   vim.api.nvim_create_autocmd({ "TextChangedI", "TextChanged" }, {
@@ -3805,7 +3817,7 @@ function M.open()
   local live_git_tick = 0
   local timer = (vim.uv or vim.loop).new_timer()
   st.marquee_timer = timer
-  timer:start(450, 450, vim.schedule_wrap(function()
+  timer:start(500, 500, vim.schedule_wrap(function()
     if closed then
       pcall(function()
         timer:stop()
@@ -3819,7 +3831,7 @@ function M.open()
     end
 
     live_git_tick = live_git_tick + 1
-    if live_git_tick % 3 == 0 then
+    if live_git_tick % 10 == 0 then
       live_refresh_git()
     end
   end))
