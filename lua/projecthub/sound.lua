@@ -62,6 +62,9 @@ function M.play(event, force)
   end
 
   local volume = (ok and config.options and config.options.sound and config.options.sound.volume) or 0.5
+  if event == "typing" then
+    volume = math.max(0.05, volume * 0.35)
+  end
 
   if vim.fn.has("mac") == 1 then
     -- macOS: afplay con qualità alta (-q 1) e volume lineare
