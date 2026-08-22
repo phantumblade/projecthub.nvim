@@ -109,9 +109,12 @@ function M.set_enabled(val)
   local ok, config = pcall(require, "projecthub.config")
   if ok and config.options then
     if not config.options.sound then
-      config.options.sound = { volume = 0.5 }
+      config.options.sound = { volume = 0.40 }
     end
     config.options.sound.enabled = (val == true)
+    if config.save_setting then
+      config.save_setting("sound_enabled", val == true)
+    end
   end
 end
 

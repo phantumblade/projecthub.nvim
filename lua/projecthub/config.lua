@@ -1,10 +1,33 @@
 local M = {}
 
+local SETTINGS_FILE = vim.fn.stdpath("data") .. "/projecthub/settings.json"
+
+local function load_persisted_settings()
+  if vim.fn.filereadable(SETTINGS_FILE) == 0 then return {} end
+  local ok, lines = pcall(vim.fn.readfile, SETTINGS_FILE)
+  if not ok or not lines or #lines == 0 then return {} end
+  local ok_json, data = pcall(vim.json.decode, table.concat(lines, "\n"))
+  return (ok_json and type(data) == "table") and data or {}
+end
+
+function M.save_setting(key, val)
+  local data_dir = vim.fn.stdpath("data") .. "/projecthub"
+  vim.fn.mkdir(data_dir, "p")
+  local current = load_persisted_settings()
+  current[key] = val
+  pcall(vim.fn.writefile, { vim.json.encode(current) }, SETTINGS_FILE)
+end
+
+function M.get_setting(key)
+  local current = load_persisted_settings()
+  return current[key]
+end
+
 --- Configurazione di default. Sovrascrivibile tramite require("projecthub").setup({...}).
 M.defaults = {
   -- Lingua dell'interfaccia: "it" oppure "en". Cambiabile a runtime con
   -- require("projecthub").set_language("it"|"en"), o dal tasto L nella
-  -- dashboard stessa.
+  -- dashboard stessa. Le preferenze vengono salvate su disco e persistite tra riavvii.
   language = "en",
 
   -- Cartelle-contenitore da scansionare per trovare progetti.
@@ -38,7 +61,7 @@ M.defaults = {
 
   -- Effetti sonori dell'interfaccia (libreria uisfx - preset minimal).
   sound = {
-    enabled = true, -- true per attivare i suoni, false per disattivarli
+    enabled = true, -- true per attivare i suoni, false per disattivarli (salvato su disco)
     volume = 0.40,  -- volume morbido e bilanciato da 0.0 a 1.0
   },
 
@@ -49,10 +72,29 @@ M.defaults = {
   on_open = nil,
 }
 
+-- Inizializza options con i default e ripristina all'istante le preferenze salvate su disco
+local initial_persisted = load_persisted_settings()
 M.options = vim.deepcopy(M.defaults)
+if initial_persisted.language ~= nil then
+  M.options.language = initial_persisted.language
+end
+if initial_persisted.sound_enabled ~= nil then
+  M.options.sound.enabled = (initial_persisted.sound_enabled == true)
+end
 
 function M.setup(opts)
-  M.options = vim.tbl_deep_extend("force", vim.deepcopy(M.defaults), opts or {})
+  local persisted = load_persisted_settings()
+  local merged = vim.tbl_deep_extend("force", vim.deepcopy(M.defaults), opts or {})
+
+  -- Le preferenze utente modificate a runtime hanno la precedenza e restano salvate
+  if persisted.language ~= nil and (not opts or opts.language == nil) then
+    merged.language = persisted.language
+  end
+  if persisted.sound_enabled ~= nil and (not opts or not opts.sound or opts.sound.enabled == nil) then
+    merged.sound.enabled = (persisted.sound_enabled == true)
+  end
+
+  M.options = merged
 end
 
 return M

@@ -74,11 +74,15 @@ function M.set_language(lang)
     l = "it"
   end
 
-  require("projecthub.config").options.language = l
+  local cfg = require("projecthub.config")
+  cfg.options.language = l
+  if cfg.save_setting then
+    cfg.save_setting("language", l)
+  end
 
   local i18n = require("projecthub.i18n")
   local msg = i18n.t("notify_lang_switched")
-  vim.notify("󰄬 " .. msg, vim.log.levels.INFO, { title = "ProjectHub" })
+  vim.notify(msg, vim.log.levels.INFO, { title = "ProjectHub", icon = "󰗊 " })
 
   local ui = require("projecthub.ui")
   if ui.is_open and ui.is_open() then

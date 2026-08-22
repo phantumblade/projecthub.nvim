@@ -3446,7 +3446,11 @@ function M.open()
   -- Switch lingua interfaccia (it <-> en), a runtime, senza uscire dalla dashboard.
   map(all_bufs, "n", { "L" }, function()
     if st.dir_picker_mode then return end
-    config.options.language = (i18n.get_lang() == "it") and "en" or "it"
+    local new_lang = (i18n.get_lang() == "it") and "en" or "it"
+    config.options.language = new_lang
+    if config.save_setting then
+      config.save_setting("language", new_lang)
+    end
     notify(i18n.t("notify_lang_switched"), nil, vim.log.levels.INFO, "\u{f075a} ", "toggle")
     M.refresh()
   end)
