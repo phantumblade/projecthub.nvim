@@ -15,7 +15,7 @@
 
 **`projecthub.nvim`** automatically scans the directories where you keep your code, presenting them as rich, interactive project cards. It displays real-time Git status, language breakdown progress bars, disk lines-of-code statistics, GitHub metadata, and lets you jump directly into any project with **Neo-tree** and `README.md` ready in a single keystroke.
 
-![ProjectHub Overview](screenshots/overview.png)
+![ProjectHub Demo](screenshots/demo.gif)
 
 ---
 
@@ -47,17 +47,21 @@
 
 ## 📸 Screenshots Showcase
 
-| 🔍 Language & Tag Search | 📜 Infinite-Scroll Commit History (`c`) |
+| 🗂️ Project Cards Overview | 🔍 Language & Tag Search |
 |:---:|:---:|
-| ![Search & Filter](screenshots/search-filter.png) | ![Commit History](screenshots/commit-history.png) |
+| ![Project Overview](screenshots/overview.png) | ![Search & Filter](screenshots/search-filter.png) |
 
-| 📖 Markdown README Preview (`s`) | 📁 Interactive Folder Browser (`a`) |
+| 📜 Infinite-Scroll Commit History (`c`) | 📖 Markdown README Preview (`s`) |
 |:---:|:---:|
-| ![README Preview](screenshots/readme-preview.png) | ![Folder Browser](screenshots/add-project.png) |
+| ![Commit History](screenshots/commit-history.png) | ![README Preview](screenshots/readme-preview.png) |
 
-| 📝 Scratchpad Notes (`n`) | 🏷️ Smart Empty State with Tags |
+| 📁 Interactive Folder Browser (`a`) | 📝 Scratchpad Notes (`n`) |
 |:---:|:---:|
-| ![Notes](screenshots/notes.png) | ![Empty State](screenshots/empty-search.png) |
+| ![Folder Browser](screenshots/add-project.png) | ![Notes](screenshots/notes.png) |
+
+| 🏷️ Smart Empty State with Tags | 🔎 Deep Inspector & Git Stats |
+|:---:|:---:|
+| ![Empty State](screenshots/empty-search.png) | ![Inspector](screenshots/inspector.png) |
 
 ---
 
