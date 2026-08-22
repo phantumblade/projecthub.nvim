@@ -36,12 +36,32 @@ function M.register_commands()
   pcall(vim.api.nvim_create_user_command, "PHLang", lang_cmd, lang_opts)
   pcall(vim.api.nvim_create_user_command, "PHl", lang_cmd, lang_opts)
   pcall(vim.api.nvim_create_user_command, "Phl", lang_cmd, lang_opts)
+
+  local sound_toggle_cmd = function() M.toggle_sound() end
+  pcall(vim.api.nvim_create_user_command, "ProjectHubSound", sound_toggle_cmd, { desc = "Toggle ProjectHub sound FX" })
+  pcall(vim.api.nvim_create_user_command, "PHSound", sound_toggle_cmd, { desc = "Toggle ProjectHub sound FX" })
+  pcall(vim.api.nvim_create_user_command, "PHSoundToggle", sound_toggle_cmd, { desc = "Toggle ProjectHub sound FX" })
 end
 
 --- Apre la dashboard dei progetti.
 function M.open()
   M.register_commands()
   require("projecthub.ui").open()
+end
+
+--- Abilita o disabilita gli effetti sonori.
+function M.toggle_sound()
+  return require("projecthub.sound").toggle()
+end
+
+--- Imposta lo stato degli effetti sonori.
+function M.set_sound(enabled)
+  require("projecthub.sound").set_enabled(enabled)
+end
+
+--- Verifica se gli effetti sonori sono abilitati.
+function M.is_sound_enabled()
+  return require("projecthub.sound").is_enabled()
 end
 
 --- Cambia la lingua dell'interfaccia a runtime ("it" oppure "en").

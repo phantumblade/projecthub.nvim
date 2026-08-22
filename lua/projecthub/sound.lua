@@ -61,4 +61,39 @@ function M.play(event)
   end
 end
 
+function M.is_enabled()
+  local ok, config = pcall(require, "projecthub.config")
+  if ok and config.options and config.options.sound then
+    return config.options.sound.enabled ~= false
+  end
+  return true
+end
+
+function M.set_enabled(val)
+  local ok, config = pcall(require, "projecthub.config")
+  if ok and config.options then
+    if not config.options.sound then
+      config.options.sound = { volume = 0.5 }
+    end
+    config.options.sound.enabled = (val == true)
+  end
+end
+
+--- Abilita o disabilita il sistema sonoro con notifica Toast e feedback.
+--- @return boolean Nuovo stato abilitato (true / false)
+function M.toggle()
+  local current = M.is_enabled()
+  local target = not current
+  M.set_enabled(target)
+
+  local i18n = require("projecthub.i18n")
+  if target then
+    M.play("toggle")
+    vim.notify("  " .. i18n.t("notify_sound_enabled"), vim.log.levels.INFO, { title = "ProjectHub" })
+  else
+    vim.notify("󰝟  " .. i18n.t("notify_sound_disabled"), vim.log.levels.WARN, { title = "ProjectHub" })
+  end
+  return target
+end
+
 return M
