@@ -3575,9 +3575,19 @@ function M.open()
   })
   vim.api.nvim_create_autocmd("ColorScheme", { buffer = st.input.buf, callback = set_hl })
 
+  local is_refreshing_git = false
+  local last_type_time = 0
+
   local function live_refresh_git()
-    if closed then return end
+    if closed or is_refreshing_git then return end
+    -- Priorità assoluta alla digitazione: se l'utente sta scrivendo nella ricerca,
+    -- ritarda il polling di background per garantire 60 FPS e 0ms di latenza sui tasti.
+    local now = (vim.uv or vim.loop).now()
+    if (now - last_type_time) < 800 then return end
+
+    is_refreshing_git = true
     P.load_git(st.all, function()
+      is_refreshing_git = false
       if not closed then
         render_list(st)
         render_preview(st)
@@ -3593,6 +3603,14 @@ function M.open()
       end, true)
     end
   end
+
+  vim.api.nvim_create_autocmd({ "TextChangedI", "TextChanged" }, {
+    buffer = st.input.buf,
+    callback = function()
+      last_type_time = (vim.uv or vim.loop).now()
+      filter(st)
+    end,
+  })
 
   vim.api.nvim_create_autocmd({ "FocusGained", "VimResume", "BufWritePost", "FileChangedShellPost" }, {
     group = grp,
