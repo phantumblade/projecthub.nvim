@@ -12,7 +12,10 @@ local SOUND_MAP = {
   open = "open.mp3",
   error = "error.mp3",
   select = "select.mp3",
+  typing = "typing.mp3",
 }
+
+local last_typing_time = 0
 
 local function get_sound_dir()
   local src = debug.getinfo(1, "S").source:sub(2)
@@ -20,12 +23,20 @@ local function get_sound_dir()
 end
 
 --- Riproduce un effetto sonoro in background in modo asincrono (0ms di blocco UI).
---- @param event string Identificatore del suono ("success", "delete", "connect", "checkpoint", "snap", "toggle", "open", "error", "select")
+--- @param event string Identificatore del suono ("success", "delete", "connect", "checkpoint", "snap", "toggle", "open", "error", "select", "typing")
 --- @param force? boolean Se true, riproduce anche se sound è disabilitato (usato per toggle_off)
 function M.play(event, force)
   local ok, config = pcall(require, "projecthub.config")
   if not force and ok and config.options and config.options.sound and config.options.sound.enabled == false then
     return
+  end
+
+  if event == "typing" then
+    local now = (vim.uv or vim.loop).now()
+    if (now - last_typing_time) < 35 then
+      return
+    end
+    last_typing_time = now
   end
 
   local filename = SOUND_MAP[event] or (event .. ".mp3")

@@ -3716,6 +3716,7 @@ function M.open()
     buffer = st.input.buf,
     callback = function()
       last_type_time = (vim.uv or vim.loop).now()
+      sound.play("typing")
       filter(st)
     end,
   })
