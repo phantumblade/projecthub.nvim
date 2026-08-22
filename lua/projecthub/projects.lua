@@ -824,8 +824,6 @@ function M.get_github_meta(path)
   local c = GH_CACHE[path]
   if type(c) == "table" then
     return c
-  elseif c == false then
-    return nil
   end
 
   local git_config = path .. "/.git/config"
@@ -840,21 +838,34 @@ function M.get_github_meta(path)
         local is_my_repo = (current_user ~= "" and owner_name:lower() == current_user:lower())
         local is_ssh = content:find("git@github%.com:") ~= nil
         local is_priv = is_my_repo and is_ssh
-        return {
+        local meta = {
           is_private = is_priv,
           stars = 0,
           forks = 0,
           owner = owner_name,
+          visibility = is_priv and "PRIVATE" or "PUBLIC",
           is_fallback = true,
         }
+        GH_CACHE[path] = meta
+        return meta
       end
     end
   end
+
+  if c == false then
+    return nil
+  end
+
   return nil
 end
 
-function M.async_load_github_meta(path, callback)
-  if M.has_gh_cache(path) then return end
+function M.async_load_github_meta(path, callback, force)
+  if not force and M.has_gh_cache(path) then
+    local cached = GH_CACHE[path]
+    if type(cached) == "table" and not cached.is_fallback then
+      return
+    end
+  end
 
   local git_dir = path .. "/.git"
   if vim.fn.isdirectory(git_dir) == 0 then
