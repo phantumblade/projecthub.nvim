@@ -24,6 +24,7 @@ local ICON_HISTORY = "\u{f02da}"
 local ICON_OVERVIEW = "\u{e66a}"
 local ICON_TRASH = "\u{f0a79}"
 local ICON_UP_DIR = "\u{f005d}"
+local ICON_STAR = "\u{f005}" -- nf-fa-star
 
 local M = {
   active_st = nil,
@@ -285,6 +286,7 @@ local function set_hl()
     ProjectsHeaderPrivate = { fg = "#bb9af7", bold = true },
     ProjectsHeaderLocal = { fg = "#565f89", italic = true },
     ProjectsHeaderStars = { fg = "#e0af68", bold = true },
+    ProjectsQuitKey = { fg = "#1a1b26", bg = "#f7768e", bold = true },
     ProjectsHeaderForks = { fg = "#2ac3de", bold = true },
     ProjectsTitleSpecial = { fg = "#7aa2f7", bold = true },
     ProjectsProjectTitle = { fg = "#7dcfff", bg = "#1f2d44", bold = true },
@@ -665,7 +667,7 @@ end
 
 local function git_chunks(g)
   if not g then return { { "…", "ProjectsMeta" } }, {} end
-  if g.none then return { { "non versionato", "ProjectsMeta" } }, {} end
+  if g.none then return { { i18n.t("badge_unversioned"), "ProjectsMeta" } }, {} end
 
   local left = { { " " .. (g.branch or "?"), "ProjectsGitBranch" } }
   local right = {}
@@ -1393,7 +1395,7 @@ local function render_inspector(st)
       vis_hl = "ProjectsHeaderPublic"
 
       if (gh_meta.stars or 0) > 0 then
-        star_text = "  ★ " .. gh_meta.stars
+        star_text = "  " .. ICON_STAR .. " " .. gh_meta.stars
       end
       if (gh_meta.forks or 0) > 0 then
         fork_text = "  " .. M.FORK_ICON .. gh_meta.forks
@@ -1825,6 +1827,83 @@ local function render_inspector(st)
 end
 
 render_preview = function(st)
+  -- Durante il benvenuto il pannello destro resta vuoto: non c'e' nessun
+  -- progetto da ispezionare e il riquadro "anteprima non disponibile"
+  -- distrarrebbe dalla scelta da fare.
+  if st.welcome_mode and not st.dir_picker_mode then
+    if not (st.preview.buf and vim.api.nvim_buf_is_valid(st.preview.buf)) then
+      st.preview.buf = vim.api.nvim_create_buf(false, true)
+    end
+    local buf = st.preview.buf
+    vim.bo[buf].modifiable = true
+    vim.bo[buf].readonly = false
+
+    local ph = vim.api.nvim_win_is_valid(st.preview.win) and vim.api.nvim_win_get_height(st.preview.win) or 20
+    local pw = vim.api.nvim_win_is_valid(st.preview.win) and vim.api.nvim_win_get_width(st.preview.win) or 40
+
+    -- Stesso font gigante del riquadro "anteprima non disponibile": il nome del
+    -- prodotto non si traduce, quindi una sola versione per entrambe le lingue.
+    local art_project = {
+      "██████╗ ██████╗  ██████╗      ██╗███████╗ ██████╗████████╗",
+      "██╔══██╗██╔══██╗██╔═══██╗     ██║██╔════╝██╔════╝╚══██╔══╝",
+      "██████╔╝██████╔╝██║   ██║     ██║█████╗  ██║        ██║   ",
+      "██╔═══╝ ██╔══██╗██║   ██║██   ██║██╔══╝  ██║        ██║   ",
+      "██║     ██║  ██║╚██████╔╝╚█████╔╝███████╗╚██████╗   ██║   ",
+      "╚═╝     ╚═╝  ╚═╝ ╚═════╝  ╚════╝ ╚══════╝ ╚═════╝   ╚═╝   ",
+    }
+    local art_hub = {
+      "██╗  ██╗██╗   ██╗██████╗ ",
+      "██║  ██║██║   ██║██╔══██╗",
+      "███████║██║   ██║██████╔╝",
+      "██╔══██║██║   ██║██╔══██╗",
+      "██║  ██║╚██████╔╝██████╔╝",
+      "╚═╝  ╚═╝ ╚═════╝ ╚═════╝ ",
+    }
+
+    local w_lines, w_hls = {}, {}
+    local function wadd(text, hl)
+      local pad = string.rep(" ", math.max(0, math.floor((pw - dw(text)) / 2)))
+      w_lines[#w_lines + 1] = pad .. text
+      if hl then w_hls[#w_hls + 1] = { #w_lines - 1, #pad, #pad + #text, hl } end
+    end
+
+    --- centra un blocco di testo gigante mantenendo l'allineamento interno:
+    --- centrare riga per riga sfalserebbe le lettere fra loro
+    local function add_block(block, hl)
+      local maxw = 0
+      for _, l in ipairs(block) do maxw = math.max(maxw, dw(l)) end
+      local pad = string.rep(" ", math.max(0, math.floor((pw - maxw) / 2)))
+      for _, l in ipairs(block) do
+        w_lines[#w_lines + 1] = pad .. l
+        w_hls[#w_hls + 1] = { #w_lines - 1, #pad, #(pad .. l), hl }
+      end
+    end
+
+    local top = math.max(1, math.floor((ph - #art_project - #art_hub - 5) / 2))
+    for _ = 1, top do w_lines[#w_lines + 1] = "" end
+    add_block(art_project, "ProjectsTitleSpecial")
+    w_lines[#w_lines + 1] = ""
+    add_block(art_hub, "ProjectsTitleSpecial")
+    w_lines[#w_lines + 1] = ""
+    w_lines[#w_lines + 1] = ""
+    wadd(i18n.t("welcome_title"), "ProjectsName")
+    for _ = 1, ph do w_lines[#w_lines + 1] = "" end
+
+    vim.api.nvim_buf_set_lines(buf, 0, -1, false, w_lines)
+    vim.bo[buf].modifiable = false
+    vim.bo[buf].readonly = true
+    vim.bo[buf].filetype = ""
+    vim.api.nvim_buf_clear_namespace(buf, ns, 0, -1)
+    for _, h in ipairs(w_hls) do
+      pcall(vim.api.nvim_buf_set_extmark, buf, ns, h[1], h[2], { end_col = h[3], hl_group = h[4] })
+    end
+    vim.api.nvim_win_set_buf(st.preview.win, buf)
+    st.preview.shown = buf
+    pcall(vim.api.nvim_win_set_config, st.preview.win, { title = "", footer = "" })
+    pcall(vim.api.nvim_win_set_cursor, st.preview.win, { 1, 0 })
+    return
+  end
+
   if st.dir_picker_mode then
     render_preview_scrollbar(st)
     if not vim.api.nvim_buf_is_valid(st.preview.buf) then
@@ -2364,6 +2443,110 @@ render_list = function(st, is_marquee_tick)
       push("")
     end
     push(text, lhls)
+  end
+
+  if st.welcome_mode and not st.dir_picker_mode then
+    lines, hls = {}, {}
+    local h = vim.api.nvim_win_is_valid(st.list.win) and vim.api.nvim_win_get_height(st.list.win) or 24
+
+    local function centered(text, hl)
+      local pad = string.rep(" ", math.max(0, math.floor((w - dw(text)) / 2)))
+      push(pad .. text, hl and { { #pad, #pad + #text, hl } } or nil)
+    end
+
+    --- riga "  <icona>  Etichetta                 <tasto> ", stile dei footer
+    local function option(icon, label, desc, key, hl_icon)
+      -- La pillola resta accanto all'etichetta invece di essere spinta al bordo
+      -- destro: con riquadri larghi finiva a mezzo schermo di distanza e non si
+      -- capiva piu' quale tasto appartenesse a quale voce.
+      local left = "   " .. icon .. "  " .. label
+      local badge = " " .. key .. " "
+      local gap = math.max(2, w - 5 - dw(left) - dw(badge))
+      local text, lhls = join({
+        { left, hl_icon },
+        { string.rep(" ", gap) },
+        { badge, "ProjectsLazyBtnKey" },
+      })
+      push(text, lhls)
+      if desc ~= "" then
+        local d = fit(desc, w - 9)
+        push("      " .. d, { { 6, 6 + #d, "ProjectsDesc" } })
+      end
+      push("")
+    end
+
+    -- Le due righe di contorno stanno agli estremi del riquadro, entrambe in
+    -- grigio: sono contesto, non scelte. In mezzo, centrato, resta solo cio'
+    -- su cui l'utente deve agire.
+    push("")
+    centered(fit(i18n.t("welcome_sub"), w - 4), "ProjectsMeta")
+
+    -- il blocco centrale si costruisce a parte, per poterlo centrare
+    -- verticalmente rispetto allo spazio che resta
+    local mid_first = #lines + 1
+    local howto = i18n.t("welcome_howto")
+    centered(fit(howto, w - 4), "ProjectsName")
+    push("")
+
+    option(ICON_FOLDER_INSPECT, i18n.t("welcome_scan_label"), i18n.t("welcome_scan_desc"), "s", "ProjectsGitBranch")
+    option(ICON_ADD, i18n.t("welcome_manual_label"), i18n.t("welcome_manual_desc"), "a", "ProjectsHeaderPublic")
+
+    -- "Esci" e' una via d'uscita, non una scelta alla pari: sta centrata sotto
+    -- le due opzioni vere, tutta in rosso compresa la pillola del tasto.
+    push("")
+    local q_label = i18n.t("welcome_quit_label") .. "   "
+    local q_key = " q "
+    local q_pad = string.rep(" ", math.max(0, math.floor((w - dw(q_label) - dw(q_key)) / 2)))
+    local q_text, q_hls = join({
+      { q_pad },
+      { q_label, "ProjectsHeaderMissing" },
+      { q_key, "ProjectsQuitKey" },
+    })
+    push(q_text, q_hls)
+    local mid_count = #lines - mid_first + 1
+
+    -- si sposta il blocco centrale al centro verticale, e il suggerimento
+    -- finisce sull'ultima riga utile del riquadro
+    local hint_line = h - 1
+    local mid_top = math.max(mid_first, math.floor((hint_line - mid_count) / 2))
+    local spacer = math.max(0, mid_top - mid_first)
+    if spacer > 0 then
+      for _ = 1, spacer do table.insert(lines, mid_first, "") end
+      for _, hl in ipairs(hls) do
+        if hl[1] >= mid_first - 1 then hl[1] = hl[1] + spacer end
+      end
+    end
+
+    while #lines < hint_line - 1 do push("") end
+    centered(fit(i18n.t("welcome_config_hint"), w - 4), "ProjectsMeta")
+
+    for _ = 1, h do push("") end
+
+    vim.bo[st.list.buf].modifiable = true
+    vim.api.nvim_buf_set_lines(st.list.buf, 0, -1, false, lines)
+    vim.bo[st.list.buf].modifiable = false
+    vim.api.nvim_buf_clear_namespace(st.list.buf, ns, 0, -1)
+    for _, hl in ipairs(hls) do
+      pcall(vim.api.nvim_buf_set_extmark, st.list.buf, ns, hl[1], hl[2], {
+        end_col = hl[3], hl_group = hl[4], hl_mode = "combine", priority = 200,
+      })
+    end
+    -- Nel benvenuto non c'e' niente da filtrare: la barra mostra il titolo e
+    -- resta inerte, cosi' l'unica cosa da fare e' premere uno dei tasti.
+    -- Si svuota il contenuto ma il buffer resta modificabile: bloccarlo
+    -- romperebbe il browser cartelle, che scrive qui la propria riga di
+    -- ricerca. Non serve comunque: senza i tasti / f i la barra e'
+    -- irraggiungibile, il focus resta sulla lista.
+    if vim.api.nvim_buf_is_valid(st.input.buf) then
+      vim.bo[st.input.buf].modifiable = true
+      vim.api.nvim_buf_set_lines(st.input.buf, 0, -1, false, { "" })
+    end
+    pcall(vim.api.nvim_win_set_config, st.input.win, {
+      title = { { " " .. ICON_OVERVIEW .. " " .. i18n.t("welcome_title") .. " ", "ProjectsTitleSpecial" } },
+      title_pos = "left",
+    })
+    render_preview(st)
+    return
   end
 
   if st.dir_picker_mode then
@@ -3036,10 +3219,10 @@ end
 function M.open()
   set_hl()
   local all = P.list()
-  if #all == 0 then
-    notify(i18n.t("notify_no_projects"), nil, "warn", "error")
-    return
-  end
+  -- Nessun progetto: invece di rifiutarsi di aprire (lasciando l'utente senza
+  -- alcun modo di procedere, visto che il tasto per aggiungerli vive DENTRO la
+  -- dashboard) si apre in modalita' benvenuto, che spiega e offre le due strade.
+  local welcome = (#all == 0)
 
   local TW = math.floor(vim.o.columns * M.config.width)
   local TH = math.floor((vim.o.lines - 2) * M.config.height)
@@ -3048,7 +3231,7 @@ function M.open()
   local LWf = math.floor(TW * M.config.left_ratio)
   local LW, RW = LWf - 2, TW - LWf - 2
 
-  local st = { all = all, items = all, sel = 1, inspector_mode = true }
+  local st = { all = all, items = all, sel = 1, inspector_mode = true, welcome_mode = welcome }
 
   local function mkbuf(scratch)
     local b = vim.api.nvim_create_buf(false, true)
@@ -3380,6 +3563,20 @@ function M.open()
   end)
 
   map(all_bufs, "n", { "s" }, function()
+    -- Nella schermata di benvenuto 's' avvia la ricerca automatica: si sceglie
+    -- la cartella-contenitore col browser gia' esistente, poi si analizza.
+    if st.welcome_mode and not st.dir_picker_mode then
+      st.dir_picker_mode = true
+      st.dir_picker_scan = true
+      st.dir_curr_dir = st.dir_curr_dir or vim.fn.expand("~")
+      st.dir_sel = 1
+      clear_dir_search()
+      vim.cmd("stopinsert")
+      vim.api.nvim_set_current_win(st.list.win)
+      refresh(st)
+      return
+    end
+
     if st.web_preview_mode then
       st.web_preview_mode = false
       clear_kitty_graphics()
@@ -3521,6 +3718,41 @@ function M.open()
         end
       end
 
+      -- Ricerca automatica: la cartella scelta e' un contenitore, si aggiungono
+      -- tutte le sottocartelle riconosciute come progetto.
+      if st.dir_picker_scan then
+        st.dir_picker_scan = false
+        st.dir_picker_mode = false
+        local short = vim.fn.fnamemodify(target_path, ":~")
+        -- messaggio su una riga sola: senza un plugin di notifiche Neovim
+        -- mostrerebbe il prompt "Press ENTER", che ruba il focus e chiude
+        -- la dashboard proprio mentre la scansione sta partendo
+        notify(i18n.t("scan_running", short), nil, "info", nil)
+        -- differito di un tick: cosi' l'avviso viene disegnato PRIMA che la
+        -- scansione (sincrona) prenda il controllo del loop
+        vim.defer_fn(function()
+          if closed or not vim.api.nvim_buf_is_valid(st.input.buf) then return end
+          local found = P.detect_projects_in(target_path)
+          local added = 0
+          for _, dir in ipairs(found) do
+            if P.add_custom_extra(dir) then added = added + 1 end
+          end
+          st.all = P.list(true)
+          if st.welcome_mode and #st.all > 0 then st.welcome_mode = false end
+          filter(st)
+          if added == 0 then
+            notify(i18n.t("scan_none", short), nil, "warn", "error")
+          else
+            local msg = (added == 1) and i18n.t("scan_found_one", short) or i18n.t("scan_found", added, short)
+            notify(msg, nil, "success", "success")
+          end
+          refresh(st)
+          P.load_git(st.all, function() render_list(st) end, true)
+          P.load_languages(st.all, function() render_list(st) end, true)
+        end, 60)
+        return
+      end
+
       local ok, code, arg = P.add_custom_extra(target_path)
       local res_title, res_body = add_extra_result_text(code, arg)
       if ok then
@@ -3536,6 +3768,7 @@ function M.open()
 
       st.dir_picker_mode = false
       st.all = P.list(true)
+      if st.welcome_mode and #st.all > 0 then st.welcome_mode = false end
       filter(st)
       P.load_git(st.all, function() render_list(st) end, true)
       P.load_languages(st.all, function() render_list(st) end, true)
@@ -3636,6 +3869,8 @@ function M.open()
   map(all_bufs, "n", { "n", "e" }, prompt_note)
 
   map(all_bufs, "n", { "/", "f", "i" }, function()
+    -- nel benvenuto non c'e' nulla da cercare: la ricerca resta disabilitata
+    if st.welcome_mode and not st.dir_picker_mode then return end
     vim.api.nvim_set_current_win(st.input.win)
     local line = vim.api.nvim_buf_get_lines(st.input.buf, 0, 1, false)[1] or ""
     vim.api.nvim_win_set_cursor(st.input.win, { 1, #line })

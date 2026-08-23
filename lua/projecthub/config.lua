@@ -23,12 +23,26 @@ function M.get_setting(key)
   return current[key]
 end
 
+--- Lingua suggerita dal sistema, se riconosciuta fra quelle tradotte.
+--- Ordine di precedenza: opzione `language` di setup() > scelta salvata
+--- dall'utente col tasto L > locale di sistema > inglese.
+local function detect_system_language()
+  local raw = vim.v.lang
+  if raw == nil or raw == "" then
+    raw = os.getenv("LC_ALL") or os.getenv("LC_MESSAGES") or os.getenv("LANG") or ""
+  end
+  local code = tostring(raw):lower():match("^(%a%a)") or ""
+  if code == "it" then return "it" end
+  return "en"
+end
+
 --- Configurazione di default. Sovrascrivibile tramite require("projecthub").setup({...}).
 M.defaults = {
-  -- Lingua dell'interfaccia: "it" oppure "en". Cambiabile a runtime con
+  -- Lingua dell'interfaccia: "it" oppure "en". Se non specificata viene dedotta
+  -- dalla locale di sistema (ripiegando su "en"). Cambiabile a runtime con
   -- require("projecthub").set_language("it"|"en"), o dal tasto L nella
   -- dashboard stessa. Le preferenze vengono salvate su disco e persistite tra riavvii.
-  language = "en",
+  language = detect_system_language(),
 
   -- Cartelle-contenitore da scansionare per trovare progetti.
   -- { percorso, profondita_di_scansione }

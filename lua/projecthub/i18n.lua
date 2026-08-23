@@ -123,6 +123,7 @@ M.locales = {
     header_private = "PRIVATO",
     header_public = "PUBBLICO",
     header_local = "LOCALE",
+    badge_unversioned = "non versionato",
     fork_of = "fork di %s",
     fork_of_original = "fork di repository originale",
 
@@ -146,6 +147,23 @@ M.locales = {
     missing_btn_remove = "Rimuovi traccia",
 
     notify_no_projects = "Nessun progetto trovato: controlla 'roots' ed 'extra' passati a require('projecthub').setup({...})",
+
+    -- Schermata di benvenuto al primo avvio (nessun progetto configurato)
+    welcome_title = "Benvenuto in ProjectHub",
+    welcome_sub = "Una dashboard visuale per aprire e tenere d'occhio i tuoi progetti.",
+    welcome_howto = "Non c'e' ancora nessun progetto. Scegli come iniziare:",
+    welcome_scan_label = "Analizza una cartella",
+    welcome_scan_desc = "Cerca i progetti dentro una cartella che ne contiene molti (es. ~/Progetti)",
+    welcome_manual_label = "Aggiungi a mano",
+    welcome_manual_desc = "Scegli una cartella singola da seguire come progetto",
+    welcome_quit_label = "Esci",
+    welcome_config_hint = "Per renderli permanenti puoi anche impostare 'roots' in setup({...}) - vedi il README",
+    scan_title = " Analizza: scegli la cartella che contiene i progetti ",
+    scan_running = "Analisi in corso in %s...",
+    scan_found = "Trovati %d progetti in %s",
+    scan_found_one = "Trovato 1 progetto in %s",
+    scan_none = "Nessun progetto riconosciuto in %s",
+    scan_hint = "Verranno aggiunte le sottocartelle che contengono un repository Git o un file di progetto riconosciuto.",
     notify_no_commits = "Nessun commit Git disponibile per '%s'",
     notify_opening_github = "Apertura %s nel browser...",
     notify_no_github = "Questo progetto non ha un repository remoto (GitHub / GitLab) collegato",
@@ -300,6 +318,7 @@ M.locales = {
     header_private = "PRIVATE",
     header_public = "PUBLIC",
     header_local = "LOCAL",
+    badge_unversioned = "not versioned",
     fork_of = "fork of %s",
     fork_of_original = "fork of the original repository",
 
@@ -323,6 +342,23 @@ M.locales = {
     missing_btn_remove = "Untrack",
 
     notify_no_projects = "No projects found: check 'roots' and 'extra' passed to require('projecthub').setup({...})",
+
+    -- First run welcome screen (no projects configured yet)
+    welcome_title = "Welcome to ProjectHub",
+    welcome_sub = "A visual dashboard to open and keep an eye on your projects.",
+    welcome_howto = "No projects yet. Pick how you want to start:",
+    welcome_scan_label = "Scan a folder",
+    welcome_scan_desc = "Look for projects inside a folder that holds many of them (e.g. ~/Projects)",
+    welcome_manual_label = "Add manually",
+    welcome_manual_desc = "Pick a single folder to track as a project",
+    welcome_quit_label = "Quit",
+    welcome_config_hint = "To make them permanent you can also set 'roots' in setup({...}) - see the README",
+    scan_title = " Scan: choose the folder that holds your projects ",
+    scan_running = "Scanning %s...",
+    scan_found = "Found %d projects in %s",
+    scan_found_one = "Found 1 project in %s",
+    scan_none = "No recognizable project in %s",
+    scan_hint = "Subfolders containing a Git repository or a known project file will be added.",
     notify_no_commits = "No Git commits available for '%s'",
     notify_opening_github = "Opening %s in browser...",
     notify_no_github = "This project has no remote (GitHub / GitLab) repository configured",

@@ -21,6 +21,7 @@
 
 ## Features
 
+- **Guided First Run**: With no projects configured yet, the dashboard opens a welcome screen offering either an automatic folder scan (`s`) or manual picking (`a`) — no config editing needed to get started.
 - **Zero-Latency Startup**: Background asynchronous scanning without UI blocking.
 - **Project Cards**: Language breakdown progress bars, branch, dirty/staged/untracked indicators, sync status (ahead/behind), and last modified time.
 - **Smart Live Filtering**:
@@ -35,8 +36,10 @@
 - **Persistent GitHub Cache**: Authenticated `gh api` queries retrieve stars, forks, visibility, and parent forks with instant `0ms` startup cache saved to disk.
 - **Folder Browser (`a`)**: Add new projects on the fly with duplicate detection.
 - **Missing Project Self-Healing (`r` / `d`)**: Highlights moved/renamed folders and offers a 1-click reconnect flow.
+- **External Drive Awareness (SSD / USB)**: Projects living on removable volumes are detected and labelled with their volume name. When the drive is unplugged the card stays in the list in a *disconnected* state, showing the cached name, description, type and language breakdown instead of vanishing. Plug the drive back in and the dashboard picks it up on its own, with no manual refresh.
 - **Scratchpad Notes (`n`)**: Dedicated per-project persistent notes editor.
 - **README & Web Previews**: Embedded Markdown preview (`s`) or browser preview (`w`).
+- **UI Sound Effects**: Subtle audio feedback on typing, selection and notifications, bundled with the plugin (no downloads, no external player to install beyond what your OS already provides). Toggle at runtime with `:ProjectHubSound`, or set `sound.enabled = false`. Volume is configurable and the choice is remembered across restarts.
 - **Bilingual (EN / IT)**: Switch language at runtime (`L` / `:ProjectHubLang`) or via config.
 - **Full Mouse & Keyboard Support**: Smooth scrolling with wheel, scrollbar dragging, and responsive single/two-column layouts.
 
@@ -70,6 +73,7 @@
 
 ### Optional Integrations
 - **[`gh` (GitHub CLI)](https://cli.github.com/)**: GitHub stars, forks, and visibility metadata.
+- **An audio player, for the sound effects**: macOS already ships `afplay`, so nothing to install. On Linux any one of `pw-play`, `paplay`, `mpv` or `ffplay` is used, whichever is found first. On Windows `ffplay`, falling back to PowerShell. Without any of them the plugin simply stays silent.
 - **[`nvim-neo-tree/neo-tree.nvim`](https://github.com/nvim-neo-tree/neo-tree.nvim)**: Opened automatically on the left when opening a project.
 - **[`MeanderingProgrammer/render-markdown.nvim`](https://github.com/MeanderingProgrammer/render-markdown.nvim)**: Formatted Markdown preview.
 - **[`folke/snacks.nvim`](https://github.com/folke/snacks.nvim)**: Dashboard button integration.
@@ -218,7 +222,7 @@ require("projecthub").setup({
 | `/` | **Search** | Focus the live search and filter input bar |
 | `<Tab>` | **Autocomplete** | Expand grey ghost-text suggestions for languages, tags, authors |
 | `c` | **Commit History** | Toggle full-screen infinite-scroll commit timeline |
-| `s` | **README Preview** | Toggle embedded Markdown / tree inspector preview |
+| `s` | **README Preview** | Toggle embedded Markdown / tree inspector preview *(on the first-run welcome screen: scan a folder for projects)* |
 | `w` | **Web Preview** | Open project `index.html` in default web browser |
 | `g` | **Git Remote** | Open repository URL (GitHub / GitLab / Bitbucket) in browser |
 | `n` / `e` | **Notes** | Open scratchpad note editor for the selected project |
@@ -228,6 +232,24 @@ require("projecthub").setup({
 | `L` | **Language** | Switch UI language instantly between English and Italian |
 | `q` / `<Esc>` | **Quit** | Close the dashboard or dismiss the current modal |
 | `<ScrollWheel>` | **Mouse Scroll** | Scroll cards list or inspector preview with inertia |
+
+---
+
+## Trying It Out Safely
+
+To see the plugin exactly as a new user would, without touching your own
+projects, notes or caches:
+
+```bash
+./scripts/try-fresh.sh
+```
+
+It starts Neovim in a throwaway sandbox (config, data, state and cache all
+redirected to a temp folder), so the first-run welcome screen appears and
+anything you add there is discarded. Your real data in
+`~/.local/share/nvim/projecthub/` is never read or written.
+
+Pass `--keep` to reuse the previous sandbox instead of starting clean.
 
 ---
 

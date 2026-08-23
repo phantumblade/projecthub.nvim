@@ -322,6 +322,43 @@ function M.is_ignored(name)
   return false
 end
 
+--- Cerca progetti fra le sottocartelle dirette di `dir`.
+--- Riconosce una cartella come progetto se contiene un repository Git oppure
+--- uno dei file indicatori usati da project_type (package.json, Cargo.toml,
+--- build.gradle, ...). Non scende in profondita': serve a popolare la lista
+--- partendo da una cartella-contenitore, non a rastrellare il disco.
+---@param dir string
+---@return string[] percorsi assoluti dei progetti trovati
+function M.detect_projects_in(dir)
+  local found = {}
+  local root = vim.fn.fnamemodify(vim.fn.expand(dir or ""), ":p"):gsub("/$", "")
+  if root == "" or vim.fn.isdirectory(root) == 0 then return found end
+
+  local ok, handle = pcall(vim.uv.fs_scandir, root)
+  if not ok or not handle then return found end
+
+  while true do
+    local name, t = vim.uv.fs_scandir_next(handle)
+    if not name then break end
+    if t == "directory" and not M.is_ignored(name) then
+      local full = root .. "/" .. name
+      local is_proj = vim.uv.fs_stat(full .. "/.git") ~= nil
+      if not is_proj then
+        for _, entry in ipairs(TYPES) do
+          if vim.uv.fs_stat(full .. "/" .. entry[1]) then
+            is_proj = true
+            break
+          end
+        end
+      end
+      if is_proj then found[#found + 1] = full end
+    end
+  end
+
+  table.sort(found)
+  return found
+end
+
 local LANG_CACHE = {}
 
 -- Rilevamento Asincrono non bloccante O(N) delle percentuali linguaggi
