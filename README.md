@@ -47,6 +47,10 @@
 
 ## Screenshots
 
+**First run** — with nothing configured yet, the dashboard explains itself and offers both routes:
+
+![Welcome Screen](screenshots/welcome-screen.png)
+
 | Project Cards Overview | Language & Tag Search |
 |:---:|:---:|
 | ![Project Overview](screenshots/overview.png) | ![Search & Filter](screenshots/search-filter.png) |
