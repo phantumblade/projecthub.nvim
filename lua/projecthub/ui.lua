@@ -1733,6 +1733,7 @@ local function render_inspector(st)
     local bot_border = "  └" .. string.rep("─", bot_fill) .. "┘"
     add(bot_border, "ProjectsName")
   end
+  end
 
   vim.api.nvim_buf_set_lines(buf, 0, -1, false, lines)
   vim.bo[buf].modifiable = false
@@ -1821,7 +1822,6 @@ local function render_inspector(st)
   })
   pcall(vim.api.nvim_win_set_cursor, st.preview.win, { 1, 0 })
   render_preview_scrollbar(st)
-end
 end
 
 render_preview = function(st)
@@ -2718,8 +2718,11 @@ move = function(st, delta)
     clear_kitty_graphics()
     st.commit_limit = 100
     if new_p then
-      local commits = P.get_commit_details(new_p.path, 1)
-      if #commits == 0 then
+      -- Niente chiamata sincrona a git qui: get_commit_details usa io.popen e
+      -- blocca la UI 30-100ms ad ogni spostamento. Lo stato git e' gia' stato
+      -- caricato in background da load_git, quindi si riusa quello.
+      local g = new_p.git
+      if g and (g.none or (tonumber(g.commits) or 0) == 0) then
         st.show_all_commits = false
       end
     end

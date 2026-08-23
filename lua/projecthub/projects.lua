@@ -716,112 +716,99 @@ function M.load_git(items, on_done, force)
     return
   end
 
-  local i, batch_size = 1, 10
+  -- Un solo processo per progetto (prima erano 3 concatenati): a parita' di
+  -- processi concorrenti si puo' alzare il lotto e ridurre il tempo totale.
+  local i, batch_size = 1, 24
   local function process_batch()
     if i > #queue then
       if on_done then on_done() end
       return
     end
 
-    local pending = math.min(batch_size, #queue - i + 1)
-    for j = 0, pending - 1 do
+    local batch_n = math.min(batch_size, #queue - i + 1)
+    local pending = batch_n
+    local batch_start = i
+
+    -- Un solo processo per progetto invece di tre annidati (status -> rev-list
+    -- -> shortlog). Oltre a ridurre di 2/3 gli spawn, elimina lo stallo: prima
+    -- il contatore veniva decrementato solo in fondo alla catena, quindi se
+    -- `git status` usciva con codice 0 ma senza output la catena non partiva
+    -- e la coda restava bloccata per sempre, senza errore.
+    local function finish(item, g, auths)
+      if item.git_done then return end
+      item.git_done = true
+      if g then
+        g.dirty = (g.modified + g.staged + g.untracked + g.conflicts) > 0
+        item.git = g
+      elseif not item.git then
+        item.git = { none = true }
+      end
+      if auths and next(auths) ~= nil then item.authors = auths end
+      pending = pending - 1
+      if pending <= 0 then
+        i = batch_start + batch_n
+        vim.schedule(process_batch)
+      end
+    end
+
+    for j = 0, batch_n - 1 do
       local item = queue[i + j]
+      item.git_done = nil
       local git_dir = item.path .. "/.git"
       if vim.fn.isdirectory(git_dir) == 0 then
-        item.git = { none = true }
-        pending = pending - 1
-        if pending == 0 then
-          i = i + math.min(batch_size, #queue - i + 1)
-          vim.schedule(process_batch)
-        end
+        finish(item, nil, nil)
       else
-        local cmd = "git -C " .. vim.fn.shellescape(item.path)
-          .. " status --porcelain=v2 --branch 2>/dev/null"
-        vim.fn.jobstart(cmd, {
+        local q = vim.fn.shellescape(item.path)
+        local script = table.concat({
+          "git -C " .. q .. " --no-optional-locks status --porcelain=v2 --branch 2>/dev/null",
+          'printf "\\037COMMITS %s\\n" "$(git -C ' .. q .. ' rev-list --count HEAD 2>/dev/null || echo 0)"',
+          'printf "\\037AUTHORS\\n"',
+          "git -C " .. q .. " shortlog -sn --no-merges HEAD 2>/dev/null",
+        }, "; ")
+
+        local out = {}
+        vim.fn.jobstart({ "sh", "-c", script }, {
           stdout_buffered = true,
           on_stdout = function(_, data)
-            if not data or #data == 0 then return end
-            local g = {
-              branch = "?",
-              commits = 0,
-              modified = 0,
-              staged = 0,
-              untracked = 0,
-              conflicts = 0,
-              ahead = 0,
-              behind = 0,
-              dirty = false,
-            }
-
-            for _, line in ipairs(data) do
-              local b = line:match("^# branch%.head%s+(.+)")
-              if b then g.branch = b end
-              local a, beh = line:match("^# branch%.ab%s+%+(%d+)%s+%-(%d+)")
-              if a and beh then
-                g.ahead, g.behind = tonumber(a) or 0, tonumber(beh) or 0
-              end
-              local xy = line:match("^[12]%s+(%S+)")
-              if xy and #xy >= 2 then
-                local x = xy:sub(1, 1)
-                local y = xy:sub(2, 2)
-                if x ~= "." then g.staged = g.staged + 1 end
-                if y ~= "." then g.modified = g.modified + 1 end
-              elseif line:match("^%?") then
-                g.untracked = g.untracked + 1
-              elseif line:match("^u") then
-                g.conflicts = g.conflicts + 1
-              end
-            end
-
-            g.dirty = (g.modified + g.staged + g.untracked + g.conflicts) > 0
-
-            local log_cmd = "git -C " .. vim.fn.shellescape(item.path) .. " rev-list --count HEAD 2>/dev/null"
-            vim.fn.jobstart(log_cmd, {
-              stdout_buffered = true,
-              on_stdout = function(_, log_data)
-                if log_data and log_data[1] then
-                  g.commits = tonumber(log_data[1]) or 0
-                end
-                item.git = g
-              end,
-              on_exit = function()
-                local s_cmd = "git -C " .. vim.fn.shellescape(item.path) .. " shortlog -sn --no-merges HEAD 2>/dev/null"
-                vim.fn.jobstart(s_cmd, {
-                  stdout_buffered = true,
-                  on_stdout = function(_, s_data)
-                    if s_data and #s_data > 0 then
-                      local auths = {}
-                      for _, sl in ipairs(s_data) do
-                        local an = sl:match("^%s*%d+%s+(.+)")
-                        if an then
-                          local ac = vim.trim(an):lower():gsub("[%s%-_%.]", "")
-                          auths[ac] = true
-                        end
-                      end
-                      item.authors = auths
-                    end
-                  end,
-                  on_exit = function()
-                    pending = pending - 1
-                    if pending == 0 then
-                      i = i + batch_size
-                      vim.schedule(process_batch)
-                    end
-                  end,
-                })
-              end,
-            })
+            if data then out = data end
           end,
           on_stderr = function() end,
-          on_exit = function(_, code)
-            if code ~= 0 and not item.git then
-              item.git = { none = true }
-              pending = pending - 1
-              if pending == 0 then
-                i = i + batch_size
-                vim.schedule(process_batch)
+          on_exit = function()
+            local g = {
+              branch = "?", commits = 0, modified = 0, staged = 0,
+              untracked = 0, conflicts = 0, ahead = 0, behind = 0, dirty = false,
+            }
+            local auths = {}
+            local in_authors = false
+            for _, line in ipairs(out) do
+              if line == "\031AUTHORS" then
+                in_authors = true
+              elseif line:match("^\031COMMITS ") then
+                g.commits = tonumber(line:match("(%d+)")) or 0
+              elseif in_authors then
+                local an = line:match("^%s*%d+%s+(.+)")
+                if an then
+                  auths[vim.trim(an):lower():gsub("[%s%-_%.]", "")] = true
+                end
+              else
+                local b = line:match("^# branch%.head%s+(.+)")
+                if b then g.branch = b end
+                local a, beh = line:match("^# branch%.ab%s+%+(%d+)%s+%-(%d+)")
+                if a and beh then
+                  g.ahead, g.behind = tonumber(a) or 0, tonumber(beh) or 0
+                end
+                local xy = line:match("^[12]%s+(%S+)")
+                if xy and #xy >= 2 then
+                  if xy:sub(1, 1) ~= "." then g.staged = g.staged + 1 end
+                  if xy:sub(2, 2) ~= "." then g.modified = g.modified + 1 end
+                elseif line:match("^%?") then
+                  g.untracked = g.untracked + 1
+                elseif line:match("^u") then
+                  g.conflicts = g.conflicts + 1
+                end
               end
             end
+            finish(item, g, auths)
           end,
         })
       end
@@ -865,20 +852,37 @@ local function load_gh_cache_from_disk()
   return (ok_json and type(data) == "table") and data or {}
 end
 
+local gh_save_pending = false
+
+-- Ogni risposta GitHub chiamava questa funzione, che riserializza e riscrive
+-- l'INTERO file: con 29 repository erano 29 riscritture complete in pochi
+-- istanti. Le scritture vengono ora accorpate in una sola.
 local function save_gh_cache_to_disk()
-  local to_save = {}
-  for k, v in pairs(GH_CACHE) do
-    if type(v) == "table" and not v.is_fallback then
-      to_save[k] = v
+  if gh_save_pending then return end
+  gh_save_pending = true
+  vim.defer_fn(function()
+    gh_save_pending = false
+    local to_save = {}
+    for k, v in pairs(GH_CACHE) do
+      if type(v) == "table" and not v.is_fallback then
+        to_save[k] = v
+      end
     end
-  end
-  local encoded = (next(to_save) == nil) and "{}" or vim.json.encode(to_save)
-  pcall(vim.fn.writefile, { encoded }, GH_META_FILE)
+    local encoded = (next(to_save) == nil) and "{}" or vim.json.encode(to_save)
+    pcall(vim.fn.writefile, { encoded }, GH_META_FILE)
+  end, 400)
 end
 
 GH_CACHE = load_gh_cache_from_disk()
 
 local COMMIT_CACHE = {}
+-- Le statistiche autori dipendono solo dal progetto, non dal numero di
+-- commit richiesti: tenerle in COMMIT_CACHE (chiave path:limit) faceva
+-- rieseguire `git shortlog` (~30ms su repo grandi) ad ogni cambio limite.
+local AUTHORS_CACHE = {}
+-- `git config user.name` e' globale: veniva letto ad ogni chiamata,
+-- costando ~12ms di processo per un valore che non cambia mai.
+local LOCAL_GIT_NAME = nil
 
 function M.clear_commit_cache(path)
   if path then
@@ -887,8 +891,10 @@ function M.clear_commit_cache(path)
         COMMIT_CACHE[k] = nil
       end
     end
+    AUTHORS_CACHE[path] = nil
   else
     COMMIT_CACHE = {}
+    AUTHORS_CACHE = {}
   end
 end
 
@@ -918,87 +924,97 @@ function M.get_commit_details(path, limit, force)
     return {}, {}
   end
 
-  local shortlog_cmd = string.format("git -C %s shortlog -sn --no-merges HEAD 2>/dev/null", vim.fn.shellescape(path))
-  local h_s = io.popen(shortlog_cmd)
-  local gh_meta = M.get_github_meta(path)
-  local repo_owner_raw = (gh_meta and gh_meta.owner) and gh_meta.owner or ""
-  local repo_owner_clean = repo_owner_raw:lower():gsub("[%s%-_%.]", "")
-
-  local me_owners = M.me and M.me.owners or {}
-  local is_my_repo = false
-  if repo_owner_clean == "" then
-    is_my_repo = true
+  local author_stats, owners_set, me_set
+  local cached_authors = (not force) and AUTHORS_CACHE[path] or nil
+  if cached_authors then
+    author_stats, owners_set, me_set = cached_authors.stats, cached_authors.owners, cached_authors.me
   else
-    for _, o in ipairs(me_owners) do
-      if o:lower():gsub("[%s%-_%.]", "") == repo_owner_clean then
-        is_my_repo = true
-        break
+    local shortlog_cmd = string.format("git -C %s shortlog -sn --no-merges HEAD 2>/dev/null", vim.fn.shellescape(path))
+    local h_s = io.popen(shortlog_cmd)
+    local gh_meta = M.get_github_meta(path)
+    local repo_owner_raw = (gh_meta and gh_meta.owner) and gh_meta.owner or ""
+    local repo_owner_clean = repo_owner_raw:lower():gsub("[%s%-_%.]", "")
+
+    local me_owners = M.me and M.me.owners or {}
+    local is_my_repo = false
+    if repo_owner_clean == "" then
+      is_my_repo = true
+    else
+      for _, o in ipairs(me_owners) do
+        if o:lower():gsub("[%s%-_%.]", "") == repo_owner_clean then
+          is_my_repo = true
+          break
+        end
       end
     end
-  end
 
-  local local_git_name = ""
-  local p_git = io.popen("git config user.name 2>/dev/null")
-  if p_git then
-    local g_out = p_git:read("*a")
-    p_git:close()
-    if g_out then local_git_name = vim.trim(g_out):lower():gsub("[%s%-_%.]", "") end
-  end
+    if LOCAL_GIT_NAME == nil then
+      LOCAL_GIT_NAME = ""
+      local p_git = io.popen("git config user.name 2>/dev/null")
+      if p_git then
+        local g_out = p_git:read("*a")
+        p_git:close()
+        if g_out then LOCAL_GIT_NAME = vim.trim(g_out):lower():gsub("[%s%-_%.]", "") end
+      end
+    end
+    local local_git_name = LOCAL_GIT_NAME
 
-  local author_stats = {}
-  local owners_set = {}
-  local me_set = {}
+    author_stats = {}
+    owners_set = {}
+    me_set = {}
 
-  if h_s then
-    local s_str = h_s:read("*a")
-    h_s:close()
-    for line in s_str:gmatch("[^\r\n]+") do
-      local count, name = line:match("^%s*(%d+)%s+(.+)$")
-      if count and name then
-        local c_name = vim.trim(name)
-        local c_clean = c_name:lower():gsub("[%s%-_%.]", "")
+    if h_s then
+      local s_str = h_s:read("*a")
+      h_s:close()
+      for line in s_str:gmatch("[^\r\n]+") do
+        local count, name = line:match("^%s*(%d+)%s+(.+)$")
+        if count and name then
+          local c_name = vim.trim(name)
+          local c_clean = c_name:lower():gsub("[%s%-_%.]", "")
 
-        local is_me = false
-        if local_git_name ~= "" and (c_clean == local_git_name or c_clean:find(local_git_name, 1, true)) then
-          is_me = true
-        else
-          for _, o in ipairs(me_owners) do
-            local o_clean = o:lower():gsub("[%s%-_%.]", "")
-            if c_clean == o_clean or c_clean:find(o_clean, 1, true) or o_clean:find(c_clean, 1, true) then
-              is_me = true
-              break
+          local is_me = false
+          if local_git_name ~= "" and (c_clean == local_git_name or c_clean:find(local_git_name, 1, true)) then
+            is_me = true
+          else
+            for _, o in ipairs(me_owners) do
+              local o_clean = o:lower():gsub("[%s%-_%.]", "")
+              if c_clean == o_clean or c_clean:find(o_clean, 1, true) or o_clean:find(c_clean, 1, true) then
+                is_me = true
+                break
+              end
+            end
+          end
+
+          if is_me then me_set[c_clean] = true end
+
+          author_stats[#author_stats + 1] = {
+            name = c_name,
+            count = tonumber(count) or 0,
+            is_owner = false,
+            is_me = is_me,
+          }
+        end
+      end
+
+      if #author_stats > 0 then
+        -- 1. Il contributor #1 (per numero di commit) è il creatore/proprietario principale
+        author_stats[1].is_owner = true
+        local top_clean = author_stats[1].name:lower():gsub("[%s%-_%.]", "")
+        owners_set[top_clean] = true
+
+        -- 2. Anche qualsiasi alias corrispondente al proprietario del repository
+        if repo_owner_clean ~= "" then
+          for _, ast in ipairs(author_stats) do
+            local c_clean = ast.name:lower():gsub("[%s%-_%.]", "")
+            if c_clean == repo_owner_clean or c_clean:find(repo_owner_clean, 1, true) or repo_owner_clean:find(c_clean, 1, true) then
+              ast.is_owner = true
+              owners_set[c_clean] = true
             end
           end
         end
-
-        if is_me then me_set[c_clean] = true end
-
-        author_stats[#author_stats + 1] = {
-          name = c_name,
-          count = tonumber(count) or 0,
-          is_owner = false,
-          is_me = is_me,
-        }
       end
     end
-
-    if #author_stats > 0 then
-      -- 1. Il contributor #1 (per numero di commit) è il creatore/proprietario principale
-      author_stats[1].is_owner = true
-      local top_clean = author_stats[1].name:lower():gsub("[%s%-_%.]", "")
-      owners_set[top_clean] = true
-
-      -- 2. Anche qualsiasi alias corrispondente al proprietario del repository
-      if repo_owner_clean ~= "" then
-        for _, ast in ipairs(author_stats) do
-          local c_clean = ast.name:lower():gsub("[%s%-_%.]", "")
-          if c_clean == repo_owner_clean or c_clean:find(repo_owner_clean, 1, true) or repo_owner_clean:find(c_clean, 1, true) then
-            ast.is_owner = true
-            owners_set[c_clean] = true
-          end
-        end
-      end
-    end
+    AUTHORS_CACHE[path] = { stats = author_stats, owners = owners_set, me = me_set }
   end
 
   local num_authors = #author_stats
@@ -1154,10 +1170,21 @@ function M.get_github_meta(path)
   return nil
 end
 
+--- La callback segnala SEMPRE il completamento, anche quando non c'e' nulla da
+--- fare: chi accoda le richieste ha bisogno di sapere quando liberare lo slot,
+--- altrimenti la coda si ferma a meta'.
 function M.async_load_github_meta(path, callback, force)
+  local finished = false
+  local function done()
+    if finished then return end
+    finished = true
+    if callback then vim.schedule(callback) end
+  end
+
   if not force and M.has_gh_cache(path) then
     local cached = GH_CACHE[path]
     if type(cached) == "table" and not cached.is_fallback then
+      done()
       return
     end
   end
@@ -1165,17 +1192,24 @@ function M.async_load_github_meta(path, callback, force)
   local git_dir = path .. "/.git"
   if vim.fn.isdirectory(git_dir) == 0 then
     GH_CACHE[path] = false
+    done()
     return
   end
 
   local r_cmd = string.format("git -C %s remote get-url origin 2>/dev/null", vim.fn.shellescape(path))
-  vim.fn.jobstart(r_cmd, {
+  -- se il processo muore senza produrre output, on_stdout non scatta: senza
+  -- questa rete lo slot della coda non verrebbe mai liberato
+  local job = vim.fn.jobstart(r_cmd, {
     stdout_buffered = true,
+    on_exit = function()
+      vim.defer_fn(done, 50)
+    end,
     on_stdout = function(_, data)
       local origin_url = (data and data[1]) and vim.trim(data[1]) or ""
       local r = parse_git_remote(origin_url)
       if not r then
         GH_CACHE[path] = false
+        done()
         return
       end
 
@@ -1261,14 +1295,34 @@ function M.async_load_github_meta(path, callback, force)
       end
     end,
   })
+  if not job or job <= 0 then done() end
 end
 
+-- Prima venivano lanciate tutte insieme: con molti repository non ancora in
+-- cache significava decine di `gh api` simultanee, che GitHub limita come
+-- raffica. Ora scorrono a finestra scorrevole.
 function M.load_github_meta_all(items)
+  local queue = {}
   for _, it in ipairs(items) do
     if not M.has_gh_cache(it.path) then
-      M.async_load_github_meta(it.path)
+      queue[#queue + 1] = it.path
     end
   end
+  if #queue == 0 then return end
+
+  local idx, running = 1, 0
+  local MAX = 6
+  local function next_one()
+    if idx > #queue then return end
+    local path = queue[idx]
+    idx = idx + 1
+    running = running + 1
+    M.async_load_github_meta(path, function()
+      running = running - 1
+      next_one()
+    end)
+  end
+  for _ = 1, math.min(MAX, #queue) do next_one() end
 end
 
 function M.get_github_url(path)
