@@ -18,6 +18,97 @@ vim.fn.mkdir(DATA_DIR, "p")
 
 local RECENTS_FILE = DATA_DIR .. "/recents.json"
 local CUSTOM_PROJECTS_FILE = DATA_DIR .. "/custom_projects.json"
+local PROJECTS_CACHE_FILE = DATA_DIR .. "/projects_cache.json"
+
+local function load_projects_cache()
+  if vim.fn.filereadable(PROJECTS_CACHE_FILE) == 0 then return {} end
+  local ok, lines = pcall(vim.fn.readfile, PROJECTS_CACHE_FILE)
+  if not ok or not lines or #lines == 0 then return {} end
+  local ok_json, data = pcall(vim.json.decode, table.concat(lines, "\n"))
+  return (ok_json and type(data) == "table") and data or {}
+end
+
+local function save_projects_cache(cache_data)
+  if not cache_data or type(cache_data) ~= "table" then return end
+  local ok_json, encoded = pcall(vim.json.encode, cache_data)
+  if ok_json and encoded then
+    pcall(vim.fn.writefile, { encoded }, PROJECTS_CACHE_FILE)
+  end
+end
+
+function M.cache_project_metadata(p)
+  if not p or not p.path or p.path == "" or p.is_missing then return end
+  local c_data = load_projects_cache()
+  local norm = vim.fn.fnamemodify(p.path, ":p"):gsub("/$", "")
+  c_data[norm] = {
+    name = p.name,
+    type = p.type,
+    desc = p.desc,
+    dir = p.dir,
+    ago = p.ago,
+    mtime = p.mtime or 0,
+    is_external = p.is_external or false,
+    volume_name = p.volume_name,
+    mount_point = p.mount_point,
+    languages = p.languages,
+    mine = p.mine,
+    owner = p.owner,
+  }
+  save_projects_cache(c_data)
+end
+
+function M.get_volume_info(path)
+  if not path or path == "" then
+    return { is_external = false, volume_name = nil, mount_point = nil }
+  end
+  local expanded = vim.fn.fnamemodify(vim.fn.expand(path), ":p"):gsub("/$", "")
+
+  -- macOS: /Volumes/<VolumeName>/...
+  local mac_vol = expanded:match("^/Volumes/([^/]+)")
+  if mac_vol then
+    local lv = mac_vol:lower()
+    if lv ~= "macintosh hd" and lv ~= "macintosh hd - data" and lv ~= "system" then
+      return {
+        is_external = true,
+        volume_name = mac_vol,
+        mount_point = "/Volumes/" .. mac_vol,
+      }
+    end
+  end
+
+  -- Linux: /media/<User>/<VolumeName>/... or /run/media/<User>/<VolumeName>/...
+  local linux_media_vol = expanded:match("^/media/[^/]+/([^/]+)") or expanded:match("^/run/media/[^/]+/([^/]+)")
+  if linux_media_vol then
+    local mp = expanded:match("^/media/[^/]+/[^/]+") or expanded:match("^/run/media/[^/]+/[^/]+")
+    return {
+      is_external = true,
+      volume_name = linux_media_vol,
+      mount_point = mp,
+    }
+  end
+
+  -- Linux: /mnt/<VolumeName>/...
+  local linux_mnt_vol = expanded:match("^/mnt/([^/]+)")
+  if linux_mnt_vol and linux_mnt_vol:lower() ~= "c" and linux_mnt_vol:lower() ~= "wsl" then
+    return {
+      is_external = true,
+      volume_name = linux_mnt_vol,
+      mount_point = "/mnt/" .. linux_mnt_vol,
+    }
+  end
+
+  -- Windows: D:\..., E:\..., F:\... (non-C drive letters)
+  local win_drive = expanded:match("^([%a]):[/\\]")
+  if win_drive and win_drive:upper() ~= "C" then
+    return {
+      is_external = true,
+      volume_name = win_drive:upper() .. ":",
+      mount_point = win_drive:upper() .. ":",
+    }
+  end
+
+  return { is_external = false, volume_name = nil, mount_point = nil }
+end
 
 function M.get_custom_extras()
   if vim.fn.filereadable(CUSTOM_PROJECTS_FILE) == 0 then return {} end
@@ -479,14 +570,17 @@ function M.list(refresh)
 
   local seen = {}
   local out = {}
+  local disk_cache = load_projects_cache()
+
   for _, path in ipairs(M.paths()) do
     local norm_path = vim.fn.fnamemodify(path, ":p"):gsub("/$", "")
     seen[norm_path] = true
     local mine, owner = is_mine(path)
     local ptype = project_type(path)
     local recent_rank = recents_map[norm_path]
+    local vol_info = M.get_volume_info(path)
 
-    out[#out + 1] = {
+    local p_item = {
       mine = mine,
       owner = owner,
       path = path,
@@ -498,8 +592,14 @@ function M.list(refresh)
       mtime = mtime(path),
       recent_rank = recent_rank,
       is_missing = false,
-      search = vim.fn.fnamemodify(path, ":t") .. " " .. path .. " " .. (ptype or ""),
+      is_external = vol_info.is_external,
+      is_disconnected = false,
+      volume_name = vol_info.volume_name,
+      mount_point = vol_info.mount_point,
+      search = vim.fn.fnamemodify(path, ":t") .. " " .. path .. " " .. (ptype or "") .. (vol_info.volume_name and (" " .. vol_info.volume_name) or ""),
     }
+    out[#out + 1] = p_item
+    M.cache_project_metadata(p_item)
   end
 
   local missing_candidates = {}
@@ -514,24 +614,60 @@ function M.list(refresh)
   for norm, _ in pairs(recents_map) do
     missing_candidates[norm] = true
   end
+  for norm, _ in pairs(disk_cache) do
+    missing_candidates[norm] = true
+  end
 
   for norm_path, _ in pairs(missing_candidates) do
     if not seen[norm_path] and vim.fn.isdirectory(norm_path) == 0 then
       seen[norm_path] = true
-      out[#out + 1] = {
-        mine = true,
-        owner = nil,
-        path = norm_path,
-        name = vim.fn.fnamemodify(norm_path, ":t"),
-        dir = vim.fn.fnamemodify(norm_path, ":h"):gsub("^" .. vim.pesc(home), "~"),
-        desc = require("projecthub.i18n").t("missing_desc"),
-        type = require("projecthub.i18n").t("missing_type"),
-        ago = require("projecthub.i18n").t("unknown"),
-        mtime = 0,
-        recent_rank = recents_map[norm_path] or 999,
-        is_missing = true,
-        search = vim.fn.fnamemodify(norm_path, ":t") .. " " .. norm_path .. " " .. require("projecthub.i18n").t("missing_search_terms"),
-      }
+      local vol_info = M.get_volume_info(norm_path)
+      local cached = disk_cache[norm_path] or {}
+
+      if vol_info.is_external or cached.is_external then
+        local v_name = vol_info.volume_name or cached.volume_name or "SSD"
+        local p_name = cached.name or vim.fn.fnamemodify(norm_path, ":t")
+        local p_type = cached.type or "SSD"
+        local p_desc = cached.desc or (require("projecthub.i18n").t("external_box_line1") .. " " .. v_name)
+        local p_dir = cached.dir or vim.fn.fnamemodify(norm_path, ":h"):gsub("^" .. vim.pesc(home), "~")
+
+        out[#out + 1] = {
+          mine = (cached.mine ~= nil) and cached.mine or true,
+          owner = cached.owner,
+          path = norm_path,
+          name = p_name,
+          dir = p_dir,
+          desc = p_desc,
+          type = p_type,
+          ago = cached.ago or require("projecthub.i18n").t("unknown"),
+          mtime = cached.mtime or 0,
+          recent_rank = recents_map[norm_path] or 999,
+          is_missing = false,
+          is_external = true,
+          is_disconnected = true,
+          volume_name = v_name,
+          mount_point = vol_info.mount_point or cached.mount_point,
+          languages = cached.languages,
+          search = p_name .. " " .. norm_path .. " " .. v_name .. " " .. require("projecthub.i18n").t("external_search_terms"),
+        }
+      else
+        out[#out + 1] = {
+          mine = true,
+          owner = nil,
+          path = norm_path,
+          name = vim.fn.fnamemodify(norm_path, ":t"),
+          dir = vim.fn.fnamemodify(norm_path, ":h"):gsub("^" .. vim.pesc(home), "~"),
+          desc = require("projecthub.i18n").t("missing_desc"),
+          type = require("projecthub.i18n").t("missing_type"),
+          ago = require("projecthub.i18n").t("unknown"),
+          mtime = 0,
+          recent_rank = recents_map[norm_path] or 999,
+          is_missing = true,
+          is_external = false,
+          is_disconnected = false,
+          search = vim.fn.fnamemodify(norm_path, ":t") .. " " .. norm_path .. " " .. require("projecthub.i18n").t("missing_search_terms"),
+        }
+      end
     end
   end
 

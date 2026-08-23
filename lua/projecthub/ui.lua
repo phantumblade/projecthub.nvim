@@ -791,12 +791,30 @@ local function card(p, w, sel, st)
     return out
   end
 
-  local ptype = p.type and (" " .. p.type .. " ") or ""
-  local name = fit(p.name, iw - dw(ptype) - 2)
+  local ptype = ""
+  local ptype_hl = "ProjectsType"
+  if p.is_disconnected then
+    ptype = " 󱊞 " .. (p.volume_name and ("SSD: " .. p.volume_name) or i18n.t("badge_external_offline")) .. " "
+    ptype_hl = "ProjectsPostItText"
+  elseif p.is_external then
+    ptype = " 󱊞 " .. (p.volume_name or i18n.t("badge_external_online")) .. " "
+    ptype_hl = "ProjectsType"
+  elseif p.type then
+    ptype = " " .. p.type .. " "
+  end
+
+  local name_icon = p.is_disconnected and "󱊞 " or ""
+  local name = fit(name_icon .. p.name, iw - dw(ptype) - 2)
   local desc = p.desc and fit(p.desc, iw) or i18n.t("no_description")
   local age = p.ago or ""
   local dir = fit(p.dir, iw - dw(age) - 2)
-  local gl, gr = git_chunks(p.git)
+  local gl, gr
+  if p.is_disconnected then
+    gl = { { "󱊞 " .. i18n.t("badge_external_offline"), "ProjectsPostItText" } }
+    gr = { { i18n.t("badge_disconnected"), "ProjectsMeta" } }
+  else
+    gl, gr = git_chunks(p.git)
+  end
 
   local bar_chunks = {}
   local legend_chunks = {}
@@ -853,7 +871,7 @@ local function card(p, w, sel, st)
 
   local rows_out = {
     { { "╭" .. string.rep("─", w - 2) .. "╮", bhl } },
-    row({ { name, nhl } }, { { ptype, "ProjectsType" } }),
+    row({ { name, nhl } }, { { ptype, ptype_hl } }),
     row({ { desc, p.desc and "ProjectsDesc" or "ProjectsMeta" } }, {}),
     row({ { dir, "ProjectsDir" } }, { { age, "ProjectsMeta" } }),
     row(gl, gr),
@@ -1279,6 +1297,9 @@ local function render_inspector(st)
     if p.is_missing then
       vis_text = ICON_ERROR .. " " .. i18n.t("header_moved")
       vis_hl = "ProjectsHeaderMissing"
+    elseif p.is_disconnected then
+      vis_text = "󱊞 " .. (p.volume_name and ("SSD: " .. p.volume_name) or i18n.t("badge_external_offline"))
+      vis_hl = "ProjectsPostItText"
     elseif gh_meta then
       if gh_meta.is_private then
         vis_text = ICON_LOCK .. " " .. i18n.t("header_private")
@@ -1371,6 +1392,29 @@ local function render_inspector(st)
         add("   │  " .. txt .. string.rep(" ", math.max(0, inner_w - dw(txt))) .. " │", row.hl)
       end
       add("   └" .. string.rep("─", inner_w + 4) .. "┘", "ProjectsHeaderMissing")
+    elseif p.is_disconnected then
+      local box_title = i18n.t("external_box_title")
+      local box_rows = {
+        { text = i18n.t("external_box_line1"), hl = "ProjectsName" },
+        { text = fit(p.path, pw - 10), hl = "ProjectsDir" },
+        { text = "", hl = "ProjectsPostItText" },
+        { text = i18n.t("external_box_line2", p.volume_name or "SSD"), hl = "ProjectsPostItText" },
+        { text = "", hl = "ProjectsPostItText" },
+        { text = i18n.t("external_box_sync"), hl = "ProjectsGitBranch" },
+      }
+      local inner_w = dw(box_title) + 2
+      for _, row in ipairs(box_rows) do
+        inner_w = math.max(inner_w, dw(row.text))
+      end
+      inner_w = math.min(inner_w, math.max(20, pw - 10))
+
+      add("   ┌─ 󱊞 " .. box_title .. " " .. string.rep("─", math.max(0, inner_w - dw(box_title) - 1)) .. "┐", "ProjectsPostItText")
+      add("   │  " .. string.rep(" ", inner_w) .. " │", "ProjectsPostItText")
+      for _, row in ipairs(box_rows) do
+        local txt = fit(row.text, inner_w)
+        add("   │  " .. txt .. string.rep(" ", math.max(0, inner_w - dw(txt))) .. " │", row.hl)
+      end
+      add("   └" .. string.rep("─", inner_w + 4) .. "┘", "ProjectsPostItText")
     else
       if p.loc_lines then
         local l_str = (p.loc_lines == 1) and i18n.t("loc_lines_1") or i18n.t("loc_lines", fmt_num(p.loc_lines))
@@ -1388,9 +1432,8 @@ local function render_inspector(st)
       add("   " .. ICON_GIT .. " " .. i18n.t("git_history", git_history_text), "ProjectsGitStaged")
       add("   " .. ICON_CLOCK .. " " .. i18n.t("last_modified", tostring(p.ago or i18n.t("unknown"))), "ProjectsMeta")
     end
-  end
 
-  if author_stats and #author_stats > 1 then
+    if author_stats and #author_stats > 1 then
     add("")
     local team_title = (#author_stats == 1) and i18n.t("team_1") or i18n.t("team", #author_stats)
     add("  \u{f0849} " .. team_title, "ProjectsName")
@@ -1522,49 +1565,52 @@ local function render_inspector(st)
     end
   end
 
-  add("")
-  if st.show_all_commits then
-    local total_git_commits = (p.git and tonumber(p.git.commits)) or #commits
-    if total_git_commits > #commits then
-      local c_title = string.format("%s (%d di %d commit caricati - Scorri per caricarne altri)", i18n.t("title_commits"), #commits, total_git_commits)
-      add("  " .. ICON_GIT .. " " .. c_title, "ProjectsTitleSpecial")
-    else
-      add("  " .. ICON_HISTORY .. " " .. i18n.t("commits_full", #commits), "ProjectsName")
-    end
-
-    if #commits > 0 then
-      for _, c in ipairs(commits) do
-        add_commit_row(c, branch_str, pw - 4)
-      end
-    else
-      add("   " .. i18n.t("commits_none"), "ProjectsDesc")
-    end
-  else
-    add("  " .. ICON_HISTORY .. " " .. i18n.t("commits_recent"), "ProjectsName")
-
-    local visible_commits = math.min(5, #commits)
-    if visible_commits > 0 then
-      for i = 1, visible_commits do
-        add_commit_row(commits[i], branch_str, pw - 4)
-      end
-
-      if #commits > 5 then
-        local diff_c = #commits - 5
-        local c_more = "   " .. ((diff_c == 1) and i18n.t("commits_more_1") or i18n.t("commits_more", diff_c))
-        add(c_more, "ProjectsMeta")
-        local l_idx = #lines - 1
-        local c_marker = i18n.t("press_c")
-        local c_pos = c_more:find(c_marker, 1, true)
-        if c_pos then
-          hls[#hls + 1] = { l_idx, c_pos + #c_marker - 1, c_pos + #c_marker, "ProjectsKeyText" }
-        end
-      end
-    else
-      add("   " .. i18n.t("commits_none"), "ProjectsDesc")
-    end
-
-    -- Boxed Post-It Card in Bottom 1/3
+  if not (p.is_missing or p.is_disconnected) then
     add("")
+    if st.show_all_commits then
+      local total_git_commits = (p.git and tonumber(p.git.commits)) or #commits
+      if total_git_commits > #commits then
+        local c_title = string.format("%s (%d di %d commit caricati - Scorri per caricarne altri)", i18n.t("title_commits"), #commits, total_git_commits)
+        add("  " .. ICON_GIT .. " " .. c_title, "ProjectsTitleSpecial")
+      else
+        add("  " .. ICON_HISTORY .. " " .. i18n.t("commits_full", #commits), "ProjectsName")
+      end
+
+      if #commits > 0 then
+        for _, c in ipairs(commits) do
+          add_commit_row(c, branch_str, pw - 4)
+        end
+      else
+        add("   " .. i18n.t("commits_none"), "ProjectsDesc")
+      end
+    else
+      add("  " .. ICON_HISTORY .. " " .. i18n.t("commits_recent"), "ProjectsName")
+
+      local visible_commits = math.min(5, #commits)
+      if visible_commits > 0 then
+        for i = 1, visible_commits do
+          add_commit_row(commits[i], branch_str, pw - 4)
+        end
+
+        if #commits > 5 then
+          local diff_c = #commits - 5
+          local c_more = "   " .. ((diff_c == 1) and i18n.t("commits_more_1") or i18n.t("commits_more", diff_c))
+          add(c_more, "ProjectsMeta")
+          local l_idx = #lines - 1
+          local c_marker = i18n.t("press_c")
+          local c_pos = c_more:find(c_marker, 1, true)
+          if c_pos then
+            hls[#hls + 1] = { l_idx, c_pos + #c_marker - 1, c_pos + #c_marker, "ProjectsKeyText" }
+          end
+        end
+      else
+        add("   " .. i18n.t("commits_none"), "ProjectsDesc")
+      end
+    end
+  end
+
+  -- Boxed Post-It Card in Bottom 1/3
+  add("")
     local max_box_dw = pw - 4
     local top_head = "  ┌─ " .. ICON_NOTE .. " " .. i18n.t("notes_title") .. " "
     local top_head_dw = vim.api.nvim_strwidth(top_head)
@@ -2576,7 +2622,21 @@ render_list = function(st, is_marquee_tick)
   if is_marquee_tick then return end
   ensure_visible(st)
 
-  local title_text = (" \u{276f}" .. i18n.t("list_title")):format(#st.items, #st.all)
+  local ext_cnt = 0
+  for _, it in ipairs(st.all) do
+    if it.is_external then
+      ext_cnt = ext_cnt + 1
+    end
+  end
+  local local_cnt = #st.all - ext_cnt
+
+  local title_text = ""
+  if ext_cnt > 0 then
+    title_text = (" \u{276f}" .. i18n.t("list_title_counts")):format(#st.all, local_cnt, ext_cnt)
+  else
+    title_text = (" \u{276f}" .. i18n.t("list_title")):format(#st.items, #st.all)
+  end
+
   if st.filter_query and st.filter_query ~= "" then
     local words = vim.split(vim.trim(st.filter_query), "%s+")
     local formatted_words = {}
@@ -2586,7 +2646,12 @@ render_list = function(st, is_marquee_tick)
         formatted_words[#formatted_words + 1] = info and info.name or w_str:upper()
       end
     end
-    title_text = (" \u{276f}" .. i18n.t("list_title_filtered")):format(table.concat(formatted_words, " "), #st.items, #st.all)
+    local query_formatted = table.concat(formatted_words, " ")
+    if ext_cnt > 0 then
+      title_text = (" \u{276f}" .. i18n.t("list_title_filtered_counts")):format(query_formatted, #st.items, #st.all, local_cnt, ext_cnt)
+    else
+      title_text = (" \u{276f}" .. i18n.t("list_title_filtered")):format(query_formatted, #st.items, #st.all)
+    end
   end
 
   pcall(vim.api.nvim_win_set_config, st.input.win, {
@@ -3754,6 +3819,35 @@ function M.open()
     -- ritarda il polling di background per garantire 60 FPS e 0ms di latenza sui tasti.
     local now = (vim.uv or vim.loop).now()
     if (now - last_type_time) < 800 then return end
+
+    -- Rilevamento automatico collegamento/scollegamento unità esterne (SSD / USB)
+    local any_drive_changed = false
+    for _, it in ipairs(st.all) do
+      if it.is_disconnected and vim.fn.isdirectory(it.path) == 1 then
+        any_drive_changed = true
+        break
+      elseif not it.is_disconnected and it.is_external and vim.fn.isdirectory(it.path) == 0 then
+        any_drive_changed = true
+        break
+      end
+    end
+
+    if any_drive_changed then
+      st.all = P.list(true)
+      filter(st)
+      P.load_git(st.all, function()
+        if not closed then
+          render_list(st)
+          if (st.view_mode or "inspector") == "inspector" then
+            render_preview(st)
+          end
+        end
+      end, true)
+      P.load_languages(st.all, function()
+        if not closed then render_list(st) end
+      end, true)
+      return
+    end
 
     local prev_git = {}
     for _, it in ipairs(st.all) do
