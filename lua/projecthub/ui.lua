@@ -25,6 +25,7 @@ local ICON_OVERVIEW = "\u{e66a}"
 local ICON_TRASH = "\u{f0a79}"
 local ICON_UP_DIR = "\u{f005d}"
 local ICON_STAR = "\u{f005}" -- nf-fa-star
+local ICON_SYNCED = "\u{e63f}" -- nf-seti-checkbox
 
 local M = {
   active_st = nil,
@@ -167,13 +168,16 @@ local function set_hl()
     ProjectsGitNew = "DiagnosticHint",
     ProjectsGitConflict = "DiagnosticError",
     ProjectsGitSync = "DiagnosticInfo",
-    ProjectsGitClean = "DiagnosticOk",
     ProjectsTreeDir = "Directory",
     ProjectsScrollbarThumb = "DiagnosticWarn",
     ProjectsGhostText = "Comment",
   }
 
   vim.api.nvim_set_hl(0, "ProjectsGhostText", { fg = "#5c6370", italic = true, default = true })
+
+  -- Spunta "in pari con il remoto": verde fisso in ogni tema, così il segnale
+  -- di sincronizzazione resta riconoscibile a colpo d'occhio.
+  vim.api.nvim_set_hl(0, "ProjectsGitClean", { fg = "#3FB950", bold = true })
 
   for from, to in pairs(hl) do
     vim.api.nvim_set_hl(0, from, { link = to, default = true })
@@ -681,7 +685,7 @@ local function git_chunks(g)
   if g.ahead > 0 then add(" ↑" .. g.ahead, "ProjectsGitSync") end
   if g.behind > 0 then add(" ↓" .. g.behind, "ProjectsGitSync") end
   if not g.dirty and g.ahead == 0 and g.behind == 0 then
-    add("  ✓", "ProjectsGitClean")
+    add("  " .. ICON_SYNCED, "ProjectsGitClean")
   end
   return left, right
 end
