@@ -237,6 +237,29 @@ local IGNORE_DIRS = {
   [".vscode"] = true,
   [".gradle"] = true,
   [".cache"] = true,
+  ["release"] = true,
+  ["releases"] = true,
+  ["bin"] = true,
+  ["obj"] = true,
+  ["coverage"] = true,
+  [".next"] = true,
+  [".nuxt"] = true,
+  [".turbo"] = true,
+  [".docusaurus"] = true,
+  ["storybook-static"] = true,
+  ["dll"] = true,
+}
+
+local IGNORE_FILES = {
+  ["package-lock.json"] = true,
+  ["yarn.lock"] = true,
+  ["pnpm-lock.yaml"] = true,
+  ["composer.lock"] = true,
+  ["Cargo.lock"] = true,
+  ["Gemfile.lock"] = true,
+  ["poetry.lock"] = true,
+  ["bun.lockb"] = true,
+  ["shrinkwrap.yaml"] = true,
 }
 
 -- Mappa estensioni -> Linguaggi di programmazione di codice
@@ -278,10 +301,8 @@ local LANG_MAP = {
 local TYPES = {
   { "Package.swift", "iOS" },
   { "Podfile", "iOS" },
-  { "app/src/main/AndroidManifest.xml", "Android" },
-  { "build.gradle.kts", "Gradle" },
+  { "build.gradle.kts", "Android" },
   { "build.gradle", "Gradle" },
-  { "pom.xml", "Java" },
   { "Cargo.toml", "Rust" },
   { "go.mod", "Go" },
   { "pyproject.toml", "Python" },
@@ -293,7 +314,12 @@ local TYPES = {
 
 function M.is_ignored(name)
   if name:sub(1, 1) == "." and name ~= ".config" then return true end
-  return IGNORE_DIRS[name] == true
+  if IGNORE_DIRS[name] then return true end
+  if IGNORE_FILES[name] then return true end
+  if name:match("%.min%.[a-zA-Z0-9]+$") or name:match("%.bundle%.[a-zA-Z0-9]+$") or name:match("%.map$") then
+    return true
+  end
+  return false
 end
 
 local LANG_CACHE = {}
@@ -921,6 +947,7 @@ function M.get_commit_details(path, limit, force)
 
   local author_stats = {}
   local owners_set = {}
+  local me_set = {}
 
   if h_s then
     local s_str = h_s:read("*a")
@@ -930,61 +957,47 @@ function M.get_commit_details(path, limit, force)
       if count and name then
         local c_name = vim.trim(name)
         local c_clean = c_name:lower():gsub("[%s%-_%.]", "")
-        local is_owner = false
 
-        if repo_owner_clean ~= "" then
-          if c_clean == repo_owner_clean or c_clean:find(repo_owner_clean, 1, true) or repo_owner_clean:find(c_clean, 1, true) then
-            is_owner = true
-          elseif is_my_repo then
-            if local_git_name ~= "" and (c_clean == local_git_name or c_clean:find(local_git_name, 1, true)) then
-              is_owner = true
-            else
-              for _, o in ipairs(me_owners) do
-                local o_clean = o:lower():gsub("[%s%-_%.]", "")
-                if c_clean == o_clean or c_clean:find(o_clean, 1, true) or o_clean:find(c_clean, 1, true) then
-                  is_owner = true
-                  break
-                end
-              end
-            end
-          end
+        local is_me = false
+        if local_git_name ~= "" and (c_clean == local_git_name or c_clean:find(local_git_name, 1, true)) then
+          is_me = true
         else
-          if local_git_name ~= "" and (c_clean == local_git_name or c_clean:find(local_git_name, 1, true)) then
-            is_owner = true
-          else
-            for _, o in ipairs(me_owners) do
-              local o_clean = o:lower():gsub("[%s%-_%.]", "")
-              if c_clean == o_clean or c_clean:find(o_clean, 1, true) or o_clean:find(c_clean, 1, true) then
-                is_owner = true
-                break
-              end
+          for _, o in ipairs(me_owners) do
+            local o_clean = o:lower():gsub("[%s%-_%.]", "")
+            if c_clean == o_clean or c_clean:find(o_clean, 1, true) or o_clean:find(c_clean, 1, true) then
+              is_me = true
+              break
             end
           end
         end
 
-        if is_owner then owners_set[c_clean] = true end
+        if is_me then me_set[c_clean] = true end
 
         author_stats[#author_stats + 1] = {
           name = c_name,
           count = tonumber(count) or 0,
-          is_owner = is_owner,
+          is_owner = false,
+          is_me = is_me,
         }
       end
     end
 
-    -- Se nessun autore corrisponde direttamente al nome owner del remote (es. organizzazione tipo "LazyVim" vs creatore "Folke Lemaitre"),
-    -- il top contributor con più commit (#1) è il proprietario/creatore principale del progetto!
-    local has_any_owner = false
-    for _, ast in ipairs(author_stats) do
-      if ast.is_owner then
-        has_any_owner = true
-        break
-      end
-    end
-    if not has_any_owner and #author_stats > 0 then
+    if #author_stats > 0 then
+      -- 1. Il contributor #1 (per numero di commit) è il creatore/proprietario principale
       author_stats[1].is_owner = true
       local top_clean = author_stats[1].name:lower():gsub("[%s%-_%.]", "")
       owners_set[top_clean] = true
+
+      -- 2. Anche qualsiasi alias corrispondente al proprietario del repository
+      if repo_owner_clean ~= "" then
+        for _, ast in ipairs(author_stats) do
+          local c_clean = ast.name:lower():gsub("[%s%-_%.]", "")
+          if c_clean == repo_owner_clean or c_clean:find(repo_owner_clean, 1, true) or repo_owner_clean:find(c_clean, 1, true) then
+            ast.is_owner = true
+            owners_set[c_clean] = true
+          end
+        end
+      end
     end
   end
 
@@ -1004,6 +1017,7 @@ function M.get_commit_details(path, limit, force)
           local a_trim = vim.trim(author)
           local a_clean = a_trim:lower():gsub("[%s%-_%.]", "")
           local a_is_owner = owners_set[a_clean] or false
+          local a_is_me = me_set[a_clean] or false
           commits[#commits + 1] = {
             hash = hash,
             age = age,
@@ -1011,6 +1025,7 @@ function M.get_commit_details(path, limit, force)
             subject = subject,
             show_author = show_author,
             is_owner = a_is_owner,
+            is_me = a_is_me,
           }
         end
       end

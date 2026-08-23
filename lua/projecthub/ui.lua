@@ -649,8 +649,9 @@ end
 local function join(chunks)
   local text, hls = "", {}
   for _, c in ipairs(chunks) do
+    local str = tostring(c[1] or "")
     local from = #text
-    text = text .. c[1]
+    text = text .. str
     if c[2] then hls[#hls + 1] = { from, #text, c[2] } end
   end
   return text, hls
@@ -658,7 +659,7 @@ end
 
 local function chunks_width(chunks)
   local n = 0
-  for _, c in ipairs(chunks) do n = n + dw(c[1]) end
+  for _, c in ipairs(chunks) do n = n + dw(c[1] or "") end
   return n
 end
 
@@ -807,7 +808,9 @@ local function card(p, w, sel, st)
   local name = fit(name_icon .. p.name, iw - dw(ptype) - 2)
   local desc = p.desc and fit(p.desc, iw) or i18n.t("no_description")
   local age = p.ago or ""
-  local dir = fit(p.dir, iw - dw(age) - 2)
+  local dir_prefix = (p.is_external or p.is_disconnected) and "󱊞 " or ""
+  local clean_dir = (p.dir or ""):gsub("^/+", "/"):gsub("^~//+", "~/")
+  local dir = fit(dir_prefix .. clean_dir, iw - dw(age) - 2)
   local gl, gr
   if p.is_disconnected then
     gl = { { "󱊞 " .. i18n.t("badge_external_offline"), "ProjectsPostItText" } }
@@ -1279,92 +1282,194 @@ local function render_inspector(st)
     return str
   end
 
-  if not st.show_all_commits then
-    -- Header Info with Top-Right GitHub Badges (Visibility, Owner, Stars, Forks)
-    local gh_meta = P.get_github_meta(p.path)
-    local title_pill = " " .. p.name .. " "
-    local header_left = "  " .. title_pill
+  local function add_commit_row(c, b_name, max_w)
+    if not c then return end
+    local subject = tostring(c.subject or "")
+    local tag_prefix = ""
+    local tag_hl = "ProjectsGitBranch"
 
-    local current_user = (config.options.me.owners and config.options.me.owners[1]) or ""
-    local show_owner_pill = false
-    local owner_pill_str = ""
-
-    local vis_text = ""
-    local vis_hl = "ProjectsHeaderLocal"
-    local star_text = ""
-    local fork_text = ""
-
-    if p.is_missing then
-      vis_text = ICON_ERROR .. " " .. i18n.t("header_moved")
-      vis_hl = "ProjectsHeaderMissing"
-    elseif p.is_disconnected then
-      vis_text = "󱊞 " .. (p.volume_name and ("SSD: " .. p.volume_name) or i18n.t("badge_external_offline"))
-      vis_hl = "ProjectsPostItText"
-    elseif gh_meta then
-      if gh_meta.is_private then
-        vis_text = ICON_LOCK .. " " .. i18n.t("header_private")
-        vis_hl = "ProjectsHeaderPrivate"
-      else
-        vis_text = ICON_GLOBE .. " " .. i18n.t("header_public")
-        vis_hl = "ProjectsHeaderPublic"
-
-        if (gh_meta.stars or 0) > 0 then
-          star_text = "  ★ " .. gh_meta.stars
-        end
-        if (gh_meta.forks or 0) > 0 then
-          fork_text = "  " .. M.FORK_ICON .. gh_meta.forks
-        end
+    local tag_word, rest = subject:match("^(%A*%a+)%s+(.*)$")
+    if tag_word then
+      local tag_u = tag_word:upper()
+      if tag_u == "FEAT" then tag_prefix = "[FEAT] "; tag_hl = "ProjectsTagFeat"; subject = rest
+      elseif tag_u == "CHANGE" or tag_u == "CHANGED" then tag_prefix = "[CHANGE] "; tag_hl = "ProjectsTagChange"; subject = rest
+      elseif tag_u == "FIX" or tag_u == "FIXED" then tag_prefix = "[FIX] "; tag_hl = "ProjectsTagFix"; subject = rest
+      elseif tag_u == "CHORE" then tag_prefix = "[CHORE] "; tag_hl = "ProjectsTagChore"; subject = rest
+      elseif tag_u == "DOCS" or tag_u == "DOC" then tag_prefix = "[DOCS] "; tag_hl = "ProjectsTagDocs"; subject = rest
+      elseif tag_u == "REFACTOR" then tag_prefix = "[REFACTOR] "; tag_hl = "ProjectsTagRefactor"; subject = rest
       end
+    end
 
-      if gh_meta.owner and gh_meta.owner:lower() ~= current_user:lower() then
-        show_owner_pill = true
-        owner_pill_str = " " .. M.ORG_ICON .. gh_meta.owner
+    local indent = "   "
+    local hash_str = tostring(c.hash or "???") .. " "
+    local b_clean = tostring(b_name or "main"):gsub("^%[", ""):gsub("%]$", "")
+    local b_str = "󰘬 " .. b_clean .. "  "
+    local date_str = i18n.format_relative_time(tostring(c.age or ""))
+    local author_name = tostring(c.author or "")
+    local role_icon = M.MEMBER_ICON
+    if c.is_owner then
+      role_icon = M.OWNER_ICON
+    end
+    local author_pill = (c.show_author and author_name ~= "") and (" " .. role_icon .. author_name .. " ") or ""
+    local gap = (#author_pill > 0) and "  " or ""
+    local right_block = date_str .. gap .. author_pill
+
+    local fixed_w = dw(indent) + dw(hash_str) + dw(b_str) + dw(tag_prefix) + dw(right_block)
+    local avail_for_subj = max_w - fixed_w
+
+    subject = subject:gsub("[%s%.…]+$", "")
+
+    if dw(subject) > avail_for_subj then
+      subject = fit(subject, avail_for_subj)
+    end
+
+    local left_line = indent .. hash_str .. b_str .. tag_prefix .. subject
+    local space_fill = math.max(0, max_w - dw(left_line) - dw(right_block))
+    local full_line = left_line .. string.rep(" ", space_fill) .. right_block
+
+    lines[#lines + 1] = full_line
+    local row_idx = #lines - 1
+
+    local c0 = 0
+    c0 = c0 + #indent
+
+    local c_hash_end = c0 + #hash_str
+    hls[#hls + 1] = { row_idx, c0, c_hash_end, "ProjectsCommitHash" }
+    c0 = c_hash_end
+
+    local c_branch_end = c0 + #b_str
+    hls[#hls + 1] = { row_idx, c0, c_branch_end, "ProjectsCommitBranch" }
+    c0 = c_branch_end
+
+    if #tag_prefix > 0 then
+      local c_tag_end = c0 + #tag_prefix
+      hls[#hls + 1] = { row_idx, c0, c_tag_end, tag_hl }
+      c0 = c_tag_end
+    end
+
+    if #subject > 0 then
+      local c_subj_end = c0 + #subject
+      hls[#hls + 1] = { row_idx, c0, c_subj_end, "ProjectsGitStaged" }
+      c0 = c_subj_end
+    end
+
+    local date_start = #full_line - #right_block
+    local date_end = date_start + #date_str
+    hls[#hls + 1] = { row_idx, date_start, date_end, "ProjectsCommitDate" }
+
+    if #author_pill > 0 then
+      local pill_start = date_end + #gap
+      local author_hl = get_author_pill_hl(author_name)
+      hls[#hls + 1] = { row_idx, pill_start, #full_line, author_hl }
+    end
+  end
+
+  -- Header Info with Top-Right GitHub Badges (Visibility, Owner, Stars, Forks)
+  local gh_meta = P.get_github_meta(p.path)
+  local title_pill = " " .. p.name .. " "
+  local header_left = "  " .. title_pill
+
+  local current_user = (config.options.me.owners and config.options.me.owners[1]) or ""
+  local show_owner_pill = false
+  local owner_pill_str = ""
+
+  local vis_text = ""
+  local vis_hl = "ProjectsHeaderLocal"
+  local star_text = ""
+  local fork_text = ""
+
+  if p.is_missing then
+    vis_text = ICON_ERROR .. " " .. i18n.t("header_moved")
+    vis_hl = "ProjectsHeaderMissing"
+  elseif p.is_disconnected then
+    vis_text = "󱊞 " .. (p.volume_name and ("SSD: " .. p.volume_name) or i18n.t("badge_external_offline"))
+    vis_hl = "ProjectsPostItText"
+  elseif gh_meta then
+    if gh_meta.is_private then
+      vis_text = ICON_LOCK .. " " .. i18n.t("header_private")
+      vis_hl = "ProjectsHeaderPrivate"
+    else
+      vis_text = ICON_GLOBE .. " " .. i18n.t("header_public")
+      vis_hl = "ProjectsHeaderPublic"
+
+      if (gh_meta.stars or 0) > 0 then
+        star_text = "  ★ " .. gh_meta.stars
+      end
+      if (gh_meta.forks or 0) > 0 then
+        fork_text = "  " .. M.FORK_ICON .. gh_meta.forks
+      end
+    end
+
+    if gh_meta.owner and gh_meta.owner:lower() ~= current_user:lower() then
+      show_owner_pill = true
+      owner_pill_str = " " .. M.ORG_ICON .. gh_meta.owner
+    end
+  else
+    vis_text = ICON_FOLDER .. " " .. i18n.t("header_local")
+    vis_hl = "ProjectsHeaderLocal"
+  end
+
+  local right_parts = {}
+  right_parts[#right_parts + 1] = { txt = vis_text, hl = vis_hl }
+  if show_owner_pill then
+    local o_hl = get_author_pill_hl(gh_meta.owner)
+    right_parts[#right_parts + 1] = { txt = " " .. owner_pill_str, hl = o_hl }
+  end
+  if star_text ~= "" then
+    right_parts[#right_parts + 1] = { txt = star_text, hl = "ProjectsHeaderStars" }
+  end
+  if fork_text ~= "" then
+    right_parts[#right_parts + 1] = { txt = fork_text, hl = "ProjectsHeaderForks" }
+  end
+
+  local header_right = ""
+  for _, part in ipairs(right_parts) do
+    header_right = header_right .. part.txt
+  end
+  header_right = header_right .. "  "
+
+  local space_fill = math.max(1, pw - vim.api.nvim_strwidth(header_left) - vim.api.nvim_strwidth(header_right))
+  local full_header = header_left .. string.rep(" ", space_fill) .. header_right
+
+  add("")
+  lines[#lines + 1] = full_header
+  local h_row = #lines - 1
+  hls[#hls + 1] = { h_row, 2, 2 + #title_pill, "ProjectsProjectTitle" }
+
+  local curr_col = #full_header - #header_right
+  for _, part in ipairs(right_parts) do
+    local p_len = #part.txt
+    hls[#hls + 1] = { h_row, curr_col, curr_col + p_len, part.hl }
+    curr_col = curr_col + p_len
+  end
+
+  local clean_path = (p.path or ""):gsub("^/+", "/")
+  local path_icon = (p.is_external or p.is_disconnected) and "󱊞 " or " "
+  add("  " .. path_icon .. clean_path, "ProjectsDir")
+  if gh_meta and (gh_meta.parent or gh_meta.is_fork) then
+    local parent_str = gh_meta.parent and i18n.t("fork_of", gh_meta.parent) or i18n.t("fork_of_original")
+    add("   " .. ICON_RELOCATE .. " " .. parent_str, "ProjectsGitBranch")
+  end
+
+  if st.show_all_commits then
+    add("")
+    local branch_str = (p.git and p.git.branch) and ("[" .. tostring(p.git.branch) .. "]") or "[main]"
+    local total_git_commits = (p.git and tonumber(p.git.commits)) or #commits
+    if total_git_commits > #commits then
+      local c_title = string.format("%s (%d di %d commit caricati - Scorri per caricarne altri)", i18n.t("title_commits"), #commits, total_git_commits)
+      add("  " .. ICON_GIT .. " " .. c_title, "ProjectsTitleSpecial")
+    else
+      add("  " .. ICON_HISTORY .. " " .. i18n.t("commits_full", #commits), "ProjectsName")
+    end
+
+    if #commits > 0 then
+      for _, c in ipairs(commits) do
+        add_commit_row(c, branch_str, pw - 4)
       end
     else
-      vis_text = ICON_FOLDER .. " " .. i18n.t("header_local")
-      vis_hl = "ProjectsHeaderLocal"
+      add("   " .. i18n.t("commits_none"), "ProjectsDesc")
     end
-
-    local right_parts = {}
-    right_parts[#right_parts + 1] = { txt = vis_text, hl = vis_hl }
-    if show_owner_pill then
-      local o_hl = get_author_pill_hl(gh_meta.owner)
-      right_parts[#right_parts + 1] = { txt = " " .. owner_pill_str, hl = o_hl }
-    end
-    if star_text ~= "" then
-      right_parts[#right_parts + 1] = { txt = star_text, hl = "ProjectsHeaderStars" }
-    end
-    if fork_text ~= "" then
-      right_parts[#right_parts + 1] = { txt = fork_text, hl = "ProjectsHeaderForks" }
-    end
-
-    local header_right = ""
-    for _, part in ipairs(right_parts) do
-      header_right = header_right .. part.txt
-    end
-    header_right = header_right .. "  "
-
-    local space_fill = math.max(1, pw - vim.api.nvim_strwidth(header_left) - vim.api.nvim_strwidth(header_right))
-    local full_header = header_left .. string.rep(" ", space_fill) .. header_right
-
-    add("")
-    lines[#lines + 1] = full_header
-    local h_row = #lines - 1
-    hls[#hls + 1] = { h_row, 2, 2 + #title_pill, "ProjectsProjectTitle" }
-
-    local curr_col = #full_header - #header_right
-    for _, part in ipairs(right_parts) do
-      local p_len = #part.txt
-      hls[#hls + 1] = { h_row, curr_col, curr_col + p_len, part.hl }
-      curr_col = curr_col + p_len
-    end
-
-    add("   " .. p.path, "ProjectsDir")
-    if gh_meta and (gh_meta.parent or gh_meta.is_fork) then
-      local parent_str = gh_meta.parent and i18n.t("fork_of", gh_meta.parent) or i18n.t("fork_of_original")
-      add("   " .. ICON_RELOCATE .. " " .. parent_str, "ProjectsGitBranch")
-    end
-
+  else
     add("")
     add("  " .. ICON_OVERVIEW .. " " .. i18n.t("overview"), "ProjectsTitleSpecial")
 
@@ -1451,7 +1556,10 @@ local function render_inspector(st)
         local a_name = tostring(ast.name)
         local c_num = ast.count or 0
         local pct = math.floor((c_num / tot_c) * 100 + 0.5)
-        local role_icon = ast.is_owner and M.OWNER_ICON or M.MEMBER_ICON
+        local role_icon = M.MEMBER_ICON
+        if ast.is_owner then
+          role_icon = M.OWNER_ICON
+        end
         local pill_str = role_icon .. a_name
         local indent = "   "
         local stat_str = i18n.t("commit_stat", c_num, pct)
@@ -1486,127 +1594,30 @@ local function render_inspector(st)
     end
   end
 
-  local function add_commit_row(c, b_name, max_w)
-    if not c then return end
-    local subject = tostring(c.subject or "")
-    local tag_prefix = ""
-    local tag_hl = "ProjectsGitBranch"
-
-    local tag_word, rest = subject:match("^(%A*%a+)%s+(.*)$")
-    if tag_word then
-      local tag_u = tag_word:upper()
-      if tag_u == "FEAT" then tag_prefix = "[FEAT] "; tag_hl = "ProjectsTagFeat"; subject = rest
-      elseif tag_u == "CHANGE" or tag_u == "CHANGED" then tag_prefix = "[CHANGE] "; tag_hl = "ProjectsTagChange"; subject = rest
-      elseif tag_u == "FIX" or tag_u == "FIXED" then tag_prefix = "[FIX] "; tag_hl = "ProjectsTagFix"; subject = rest
-      elseif tag_u == "CHORE" then tag_prefix = "[CHORE] "; tag_hl = "ProjectsTagChore"; subject = rest
-      elseif tag_u == "DOCS" or tag_u == "DOC" then tag_prefix = "[DOCS] "; tag_hl = "ProjectsTagDocs"; subject = rest
-      elseif tag_u == "REFACTOR" then tag_prefix = "[REFACTOR] "; tag_hl = "ProjectsTagRefactor"; subject = rest
-      end
-    end
-
-    local indent = "   "
-    local hash_str = tostring(c.hash or "???") .. " "
-    local b_clean = tostring(b_name or "main"):gsub("^%[", ""):gsub("%]$", "")
-    local b_str = "󰘬 " .. b_clean .. "  "
-    local date_str = i18n.format_relative_time(tostring(c.age or ""))
-    local author_name = tostring(c.author or "")
-    local role_icon = c.is_owner and M.OWNER_ICON or M.MEMBER_ICON
-    local author_pill = (c.show_author and author_name ~= "") and (" " .. role_icon .. author_name .. " ") or ""
-    local gap = (#author_pill > 0) and "  " or ""
-    local right_block = date_str .. gap .. author_pill
-
-    local fixed_w = dw(indent) + dw(hash_str) + dw(b_str) + dw(tag_prefix) + dw(right_block)
-    local avail_for_subj = max_w - fixed_w
-
-    subject = subject:gsub("[%s%.…]+$", "")
-
-    if dw(subject) > avail_for_subj then
-      subject = fit(subject, avail_for_subj)
-    end
-
-    local left_line = indent .. hash_str .. b_str .. tag_prefix .. subject
-    local space_fill = math.max(0, max_w - dw(left_line) - dw(right_block))
-    local full_line = left_line .. string.rep(" ", space_fill) .. right_block
-
-    lines[#lines + 1] = full_line
-    local row_idx = #lines - 1
-
-    local c0 = 0
-    c0 = c0 + #indent
-
-    local c_hash_end = c0 + #hash_str
-    hls[#hls + 1] = { row_idx, c0, c_hash_end, "ProjectsCommitHash" }
-    c0 = c_hash_end
-
-    local c_branch_end = c0 + #b_str
-    hls[#hls + 1] = { row_idx, c0, c_branch_end, "ProjectsCommitBranch" }
-    c0 = c_branch_end
-
-    if #tag_prefix > 0 then
-      local c_tag_end = c0 + #tag_prefix
-      hls[#hls + 1] = { row_idx, c0, c_tag_end, tag_hl }
-      c0 = c_tag_end
-    end
-
-    if #subject > 0 then
-      local c_subj_end = c0 + #subject
-      hls[#hls + 1] = { row_idx, c0, c_subj_end, "ProjectsGitStaged" }
-      c0 = c_subj_end
-    end
-
-    local date_start = #full_line - #right_block
-    local date_end = date_start + #date_str
-    hls[#hls + 1] = { row_idx, date_start, date_end, "ProjectsCommitDate" }
-
-    if #author_pill > 0 then
-      local pill_start = date_end + #gap
-      local author_hl = get_author_pill_hl(author_name)
-      hls[#hls + 1] = { row_idx, pill_start, #full_line, author_hl }
-    end
-  end
-
   if not (p.is_missing or p.is_disconnected) then
     add("")
-    if st.show_all_commits then
-      local total_git_commits = (p.git and tonumber(p.git.commits)) or #commits
-      if total_git_commits > #commits then
-        local c_title = string.format("%s (%d di %d commit caricati - Scorri per caricarne altri)", i18n.t("title_commits"), #commits, total_git_commits)
-        add("  " .. ICON_GIT .. " " .. c_title, "ProjectsTitleSpecial")
-      else
-        add("  " .. ICON_HISTORY .. " " .. i18n.t("commits_full", #commits), "ProjectsName")
+    add("  " .. ICON_HISTORY .. " " .. i18n.t("commits_recent"), "ProjectsName")
+
+    local visible_commits = math.min(5, #commits)
+    if visible_commits > 0 then
+      local branch_str = (p.git and p.git.branch) and ("[" .. tostring(p.git.branch) .. "]") or "[main]"
+      for i = 1, visible_commits do
+        add_commit_row(commits[i], branch_str, pw - 4)
       end
 
-      if #commits > 0 then
-        for _, c in ipairs(commits) do
-          add_commit_row(c, branch_str, pw - 4)
+      if #commits > 5 then
+        local diff_c = #commits - 5
+        local c_more = "   " .. ((diff_c == 1) and i18n.t("commits_more_1") or i18n.t("commits_more", diff_c))
+        add(c_more, "ProjectsMeta")
+        local l_idx = #lines - 1
+        local c_marker = i18n.t("press_c")
+        local c_pos = c_more:find(c_marker, 1, true)
+        if c_pos then
+          hls[#hls + 1] = { l_idx, c_pos + #c_marker - 1, c_pos + #c_marker, "ProjectsKeyText" }
         end
-      else
-        add("   " .. i18n.t("commits_none"), "ProjectsDesc")
       end
     else
-      add("  " .. ICON_HISTORY .. " " .. i18n.t("commits_recent"), "ProjectsName")
-
-      local visible_commits = math.min(5, #commits)
-      if visible_commits > 0 then
-        for i = 1, visible_commits do
-          add_commit_row(commits[i], branch_str, pw - 4)
-        end
-
-        if #commits > 5 then
-          local diff_c = #commits - 5
-          local c_more = "   " .. ((diff_c == 1) and i18n.t("commits_more_1") or i18n.t("commits_more", diff_c))
-          add(c_more, "ProjectsMeta")
-          local l_idx = #lines - 1
-          local c_marker = i18n.t("press_c")
-          local c_pos = c_more:find(c_marker, 1, true)
-          if c_pos then
-            hls[#hls + 1] = { l_idx, c_pos + #c_marker - 1, c_pos + #c_marker, "ProjectsKeyText" }
-          end
-        end
-      else
-        add("   " .. i18n.t("commits_none"), "ProjectsDesc")
-      end
-    end
+      add("   " .. i18n.t("commits_none"), "ProjectsDesc")
   end
 
   -- Boxed Post-It Card in Bottom 1/3
@@ -1810,6 +1821,7 @@ local function render_inspector(st)
   })
   pcall(vim.api.nvim_win_set_cursor, st.preview.win, { 1, 0 })
   render_preview_scrollbar(st)
+end
 end
 
 render_preview = function(st)
@@ -2375,7 +2387,9 @@ render_list = function(st, is_marquee_tick)
     st.dir_entries = { { type = "up" } }
     for _, s in ipairs(subdirs) do
       if query == "" or s:lower():find(query, 1, true) then
-        st.dir_entries[#st.dir_entries + 1] = { type = "dir", name = s, full = curr_dir .. "/" .. s }
+        local full_p = (curr_dir == "/" and "/" or (curr_dir .. "/")) .. s
+        full_p = full_p:gsub("^/+", "/")
+        st.dir_entries[#st.dir_entries + 1] = { type = "dir", name = s, full = full_p }
       end
     end
     st.dir_sel = math.max(1, math.min(#st.dir_entries, st.dir_sel or 1))
@@ -3402,7 +3416,7 @@ function M.open()
         return
       end
       st.view_mode = "inspector"
-      st.commit_limit = 100
+      st.commit_limit = 1000
       st.show_all_commits = not st.show_all_commits
       refresh(st)
     end

@@ -47,7 +47,7 @@ M.defaults = {
   icons = {
     owner = "\u{edeb} ", -- nf-fa-crown
     org = "\u{f42b} ", -- nf-oct-organization
-    member = "\u{f0009} ", -- nf-md-account
+    member = "\u{f007} ", -- nf-fa-user
     fork = "\u{ea63} ", -- nf-cod-repo_forked
   },
 
