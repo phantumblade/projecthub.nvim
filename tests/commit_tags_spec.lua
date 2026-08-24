@@ -33,6 +33,11 @@ check("perf(ui): riduce i ridisegni",          "PERF", "ui")
 check("bump: dipendenze aggiornate",           "DEPS", nil)
 check("Merge branch 'main'",                   "MERGE", nil)
 check("wip qualcosa",                          "WIP",  nil)
+check("[SETUP] aggiunge controlli just",       "SETUP", nil)
+check("setup di Firebase e Maps API",          "SETUP", nil)
+check("setup(ci): cache dei runner",           "SETUP", "ci")
+check("bootstrap - primo ambiente",            "SETUP", nil)
+check("Fixing della vecchia preview",          "FIX",  nil)
 
 print("--- forme che NON devono diventare badge ---")
 check("risolve il feat mancante",              nil, nil)
@@ -47,6 +52,8 @@ check("Revert \"feat: qualcosa\"",             "REVERT", nil)  -- questo invece 
 print("--- alias informali SOLO se delimitati ---")
 check("[add] nuova funzione",                  "FEAT", nil)
 check("update: rinfresca la cache",            "CHANGE", nil)
+check("[config] regole eslint",                "SETUP", nil)
+check("config del linter sbagliata",           nil, nil)   -- 'config' nudo: e' un sostantivo
 
 print(string.format("\nrisultato: %d passati, %d falliti", ok, ko))
 vim.cmd(ko == 0 and "qa!" or "cq")

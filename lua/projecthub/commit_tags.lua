@@ -17,7 +17,7 @@ local M = {}
 --- di un tipo, per non trasformare in badge l'inizio di una frase qualsiasi.
 local ALIASES = {
   feat = "FEAT", feats = "FEAT", feature = "FEAT", features = "FEAT",
-  fix = "FIX", fixes = "FIX", fixed = "FIX", bugfix = "FIX", hotfix = "FIX",
+  fix = "FIX", fixes = "FIX", fixed = "FIX", fixing = "FIX", bugfix = "FIX", hotfix = "FIX",
   docs = "DOCS", doc = "DOCS", documentation = "DOCS",
   style = "STYLE", styles = "STYLE", format = "STYLE", formatting = "STYLE",
   refactor = "REFACTOR", refactoring = "REFACTOR", refac = "REFACTOR",
@@ -30,6 +30,8 @@ local ALIASES = {
   change = "CHANGE", changed = "CHANGE", changes = "CHANGE", update = "CHANGE", updated = "CHANGE",
   breaking = "BREAKING",
   init = "INIT", initial = "INIT", start = "INIT",
+  setup = "SETUP", bootstrap = "SETUP", scaffold = "SETUP",
+  config = "SETUP", configure = "SETUP", conf = "SETUP",
   wip = "WIP",
   merge = "MERGE", merged = "MERGE",
   security = "SECURITY", sec = "SECURITY",
@@ -48,6 +50,10 @@ local BARE_OK = {
   perf = true, test = true, tests = true, build = true, ci = true,
   chore = true, revert = true, breaking = true, wip = true, merge = true,
   security = true, deps = true, init = true,
+  -- "setup" entra anche nudo: da solo apre un messaggio che parla
+  -- comunque di predisposizione. "config" invece resta fuori, perché
+  -- è prima di tutto un sostantivo ("config del linter sbagliata").
+  setup = true, bootstrap = true, scaffold = true, fixing = true,
 }
 
 --- Gerarchia cromatica. Il colore dice quanta attenzione merita il commit,
@@ -55,13 +61,15 @@ local BARE_OK = {
 ---   rosso/magenta  = fermati e leggi (rompe, o riguarda la sicurezza)
 ---   arancio/oro    = qualcosa era rotto ed è stato aggiustato, o è cambiato
 ---   verde          = capacità nuove
----   oliva/blu      = informazione e verifica (docs, test, CI, build)
+---   oliva/blu      = informazione e infrastruttura (docs, test, CI, build, setup)
 ---   viola/grigio   = manutenzione, invisibile a chi usa il progetto
 ---
 --- Le tinte non sono scelte a occhio: sono state verificate calcolando la
 --- distanza percettiva (CIE Lab ΔE) fra ogni coppia, così i tag che compaiono
 --- di continuo restano i più distinguibili fra loro: minima globale 17.9,
---- con ogni badge sopra 4.5:1 di contrasto sul proprio sfondo.
+--- con ogni badge sopra 4.5:1 di contrasto sul proprio sfondo. SETUP è stato
+--- inserito nel varco di tinta più ampio (fra REFACTOR e TEST): dista 26.5 dal
+--- vicino più prossimo, quindi il diciannovesimo tag non stringe la minima.
 M.COLORS = {
   -- Allarme: rari di proposito. Un colore che compare di continuo smette di
   -- essere un segnale, quindi il rosso è riservato a ciò che va letto subito.
@@ -83,6 +91,7 @@ M.COLORS = {
   TEST     = "#7dcfff",
   CI       = "#82aaff",
   BUILD    = "#4fd6be",
+  SETUP    = "#30aab8", -- petrolio: predisporre l'ambiente, parente di BUILD
   MERGE    = "#9ab0d0",
 
   -- Manutenzione: invisibile a chi usa il progetto

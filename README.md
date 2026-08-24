@@ -30,7 +30,7 @@
   - Visibility tags: `PUBBLICO` (`PUBLIC`), `PRIVATO` (`PRIVATE`), `LOCALE` (`LOCAL`, `untracked`).
 - **Deep Inspector Panel**:
   - Asynchronous Lines-of-Code (LOC) calculator and file counter.
-  - Commit tag badges: `feat:`, `[FIX]`, `fix(core)!:`, `DOCS - …` and other common spellings are all recognised at the start of a subject and rendered as one uniform coloured badge, so you can find every fix in a long history by colour alone. 18 tags, coloured by what kind of risk the commit carries.
+  - Commit tag badges: `feat:`, `[FIX]`, `fix(core)!:`, `DOCS - …` and other common spellings are all recognised at the start of a subject and rendered as one uniform coloured badge, so you can find every fix in a long history by colour alone. 19 tags, coloured by what kind of risk the commit carries.
   - Infinite-scroll Git commit timeline (`c`) with automatic pagination (+100 commits).
   - Contributor breakdown with role icons (Owner, Organization, Member).
 - **Persistent GitHub Cache**: Authenticated `gh api` queries retrieve stars, forks, visibility, and parent forks with instant `0ms` startup cache saved to disk.
@@ -282,10 +282,9 @@ Recognised forms, **at the start of the subject only** — a word like "fix" in 
 | `Docs - update the guide` | `DOCS` |
 | `chore \| cleanup` | `CHORE` |
 | `fix resolves the crash` | `FIX` |
+| `setup di Firebase` `[SETUP] …` | `SETUP` |
 
-Bare words are accepted only when the word *is* a type name. `Add support for tags` and `Update the readme` stay plain, because those open perfectly ordinary sentences — an informal alias like `add` is only honoured when it is explicitly delimited, as in `[add] new feature`.
-
-Colour follows what kind of work the commit represents, so the palette is readable rather than merely varied:
+Bare words are accepted only when the word *is* a type name. `Add support for tags` and `Update the readme` stay plain, because those open perfectly ordinary sentences — an informal alias like `add` is only honoured when it is explicitly delimited, as in `[add] new feature`. The same two-tier rule separates `setup`, which is a type name and so is read bare, from `config`, which is first of all a noun (`config del linter sbagliata`) and therefore needs a delimiter: `[config] eslint rules`.
 
 Colour says how much attention the commit deserves, not merely that it differs from its neighbours:
 
@@ -294,12 +293,12 @@ Colour says how much attention the commit deserves, not merely that it differs f
 | Red / magenta | `BREAKING` `SECURITY` `REVERT` | Stop and read this |
 | Orange / gold | `FIX` `CHANGE` `PERF` | Something was broken and got repaired, or behaviour moved |
 | Green | `FEAT` `DEPS` | New capability |
-| Olive / blue | `DOCS` `TEST` `CI` `BUILD` `MERGE` | Information and verification |
+| Olive / blue | `DOCS` `TEST` `CI` `BUILD` `SETUP` `MERGE` | Information and infrastructure |
 | Violet / grey | `REFACTOR` `STYLE` `CHORE` `INIT` `WIP` | Maintenance, invisible to users |
 
 Red is deliberately rare. `FIX` is the most frequent tag in most histories, so painting it red would have made red the default colour of the screen — and a colour that appears constantly stops being a signal. Orange marks a repair; red is kept for the handful of commits that genuinely demand attention.
 
-The hues were not picked by eye. Every pair was measured for perceptual distance (CIE Lab ΔE) and the assignment chosen to maximise the minimum separation between the tags that appear most often — 17.9 across all 18, against 9.8 for a hand-picked arrangement. Each badge is bold text on a background derived from its own colour, all clearing 4.5:1 contrast. The scope of a conventional commit is shown after the badge in a muted version of the same colour, so it stays attached to the tag without competing with the subject. No separator sits between them — the colour already tells them apart, and a divider would cost two columns of subject on every row.
+The hues were not picked by eye. Every pair was measured for perceptual distance (CIE Lab ΔE) and the assignment chosen to maximise the minimum separation between the tags that appear most often — 17.9 across all 18, against 9.8 for a hand-picked arrangement. The nineteenth tag, `SETUP`, was placed in the widest gap left in the hue circle (between `REFACTOR` and `TEST`), where it sits 26.5 from its nearest neighbour and so leaves that minimum untouched. Each badge is bold text on a background derived from its own colour, all clearing 4.5:1 contrast. The scope of a conventional commit is shown after the badge in a muted version of the same colour, so it stays attached to the tag without competing with the subject. No separator sits between them — the colour already tells them apart, and a divider would cost two columns of subject on every row.
 
 ---
 
