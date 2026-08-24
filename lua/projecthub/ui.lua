@@ -1383,27 +1383,95 @@ local function render_inspector(st)
   local space_fill = math.max(1, pw - vim.api.nvim_strwidth(header_left) - vim.api.nvim_strwidth(header_right))
   local full_header = header_left .. string.rep(" ", space_fill) .. header_right
 
-  add("")
-  lines[#lines + 1] = full_header
-  local h_row = #lines - 1
-  hls[#hls + 1] = { h_row, 2, 2 + #title_pill, "ProjectsProjectTitle" }
+  -- Nella cronologia completa l'intestazione del progetto non si ripete:
+  -- nome, percorso e provenienza del fork sono già sulla card a sinistra, e
+  -- qui ruberebbero tre righe a ciò che si è venuti a leggere.
+  if not st.show_all_commits then
+    add("")
+    lines[#lines + 1] = full_header
+    local h_row = #lines - 1
+    hls[#hls + 1] = { h_row, 2, 2 + #title_pill, "ProjectsProjectTitle" }
 
-  local curr_col = #full_header - #header_right
-  for _, part in ipairs(right_parts) do
-    local p_len = #part.txt
-    hls[#hls + 1] = { h_row, curr_col, curr_col + p_len, part.hl }
-    curr_col = curr_col + p_len
+    local curr_col = #full_header - #header_right
+    for _, part in ipairs(right_parts) do
+      local p_len = #part.txt
+      hls[#hls + 1] = { h_row, curr_col, curr_col + p_len, part.hl }
+      curr_col = curr_col + p_len
+    end
+
+    local clean_path = (p.path or ""):gsub("^/+", "/")
+    local path_icon = (p.is_external or p.is_disconnected) and "󱊞 " or " "
+    add("  " .. path_icon .. clean_path, "ProjectsDir")
+    if gh_meta and (gh_meta.parent or gh_meta.is_fork) then
+      local parent_str = gh_meta.parent and i18n.t("fork_of", gh_meta.parent) or i18n.t("fork_of_original")
+      add("   " .. ICON_RELOCATE .. " " .. parent_str, "ProjectsGitBranch")
+    end
   end
 
-  local clean_path = (p.path or ""):gsub("^/+", "/")
-  local path_icon = (p.is_external or p.is_disconnected) and "󱊞 " or " "
-  add("  " .. path_icon .. clean_path, "ProjectsDir")
-  if gh_meta and (gh_meta.parent or gh_meta.is_fork) then
-    local parent_str = gh_meta.parent and i18n.t("fork_of", gh_meta.parent) or i18n.t("fork_of_original")
-    add("   " .. ICON_RELOCATE .. " " .. parent_str, "ProjectsGitBranch")
+  -- Blocco "Team & collaboratori", condiviso dalle due modalità: in
+  -- panoramica troncato ai primi tre, nella cronologia completa per intero.
+  local function emit_authors(show_all)
+    if not (author_stats and #author_stats > 1) then return end
+    add("")
+    local team_title = (#author_stats == 1) and i18n.t("team_1") or i18n.t("team", #author_stats)
+    add("  \u{f0849} " .. team_title, "ProjectsName")
+
+    local tot_c = 0
+    for _, ast in ipairs(author_stats) do
+      tot_c = tot_c + (ast.count or 0)
+    end
+    if tot_c == 0 then tot_c = 1 end
+
+    local max_authors = show_all and #author_stats or math.min(3, #author_stats)
+    for i = 1, max_authors do
+      local ast = author_stats[i]
+      if ast and ast.name then
+        local a_name = tostring(ast.name)
+        local c_num = ast.count or 0
+        local pct = math.floor((c_num / tot_c) * 100 + 0.5)
+        local role_icon = M.MEMBER_ICON
+        if ast.is_owner then
+          role_icon = M.OWNER_ICON
+        end
+        local pill_str = role_icon .. a_name
+        local indent = "   "
+        local stat_str = i18n.t("commit_stat", c_num, pct)
+
+        local line_left = indent .. pill_str .. "  "
+        local fill_w = math.max(1, pw - 6 - vim.api.nvim_strwidth(line_left) - vim.api.nvim_strwidth(stat_str))
+        local full_line = line_left .. string.rep(" ", fill_w) .. stat_str
+
+        lines[#lines + 1] = full_line
+        local r_idx = #lines - 1
+
+        local p_start = #indent
+        local p_end = p_start + #pill_str
+        local a_hl = get_author_pill_hl(a_name)
+        hls[#hls + 1] = { r_idx, p_start, p_end, a_hl }
+
+        local s_start = #full_line - #stat_str
+        hls[#hls + 1] = { r_idx, s_start, #full_line, "ProjectsMeta" }
+      end
+    end
+
+    if not show_all and #author_stats > 3 then
+      local diff_authors = #author_stats - 3
+      local a_more = "   " .. ((diff_authors == 1) and i18n.t("team_more_1") or i18n.t("team_more", diff_authors))
+      add(a_more, "ProjectsMeta")
+      local l_idx = #lines - 1
+      local c_marker = i18n.t("press_c")
+      local c_pos = a_more:find(c_marker, 1, true)
+      if c_pos then
+        hls[#hls + 1] = { l_idx, c_pos + #c_marker - 1, c_pos + #c_marker, "ProjectsKeyText" }
+      end
+    end
   end
 
   if st.show_all_commits then
+    -- L'elenco completo dei collaboratori apre il pannello: sotto centinaia
+    -- di commit sarebbe di fatto irraggiungibile.
+    emit_authors(true)
+
     add("")
     local branch_str = (p.git and p.git.branch) and ("[" .. tostring(p.git.branch) .. "]") or "[main]"
     local total_git_commits = (p.git and tonumber(p.git.commits)) or #commits
@@ -1490,61 +1558,7 @@ local function render_inspector(st)
       add("   " .. ICON_CLOCK .. " " .. i18n.t("last_modified", tostring(p.ago or i18n.t("unknown"))), "ProjectsMeta")
     end
 
-    if author_stats and #author_stats > 1 then
-    add("")
-    local team_title = (#author_stats == 1) and i18n.t("team_1") or i18n.t("team", #author_stats)
-    add("  \u{f0849} " .. team_title, "ProjectsName")
-
-    local tot_c = 0
-    for _, ast in ipairs(author_stats) do
-      tot_c = tot_c + (ast.count or 0)
-    end
-    if tot_c == 0 then tot_c = 1 end
-
-    local max_authors = st.show_all_commits and #author_stats or math.min(3, #author_stats)
-    for i = 1, max_authors do
-      local ast = author_stats[i]
-      if ast and ast.name then
-        local a_name = tostring(ast.name)
-        local c_num = ast.count or 0
-        local pct = math.floor((c_num / tot_c) * 100 + 0.5)
-        local role_icon = M.MEMBER_ICON
-        if ast.is_owner then
-          role_icon = M.OWNER_ICON
-        end
-        local pill_str = role_icon .. a_name
-        local indent = "   "
-        local stat_str = i18n.t("commit_stat", c_num, pct)
-
-        local line_left = indent .. pill_str .. "  "
-        local fill_w = math.max(1, pw - 6 - vim.api.nvim_strwidth(line_left) - vim.api.nvim_strwidth(stat_str))
-        local full_line = line_left .. string.rep(" ", fill_w) .. stat_str
-
-        lines[#lines + 1] = full_line
-        local r_idx = #lines - 1
-
-        local p_start = #indent
-        local p_end = p_start + #pill_str
-        local a_hl = get_author_pill_hl(a_name)
-        hls[#hls + 1] = { r_idx, p_start, p_end, a_hl }
-
-        local s_start = #full_line - #stat_str
-        hls[#hls + 1] = { r_idx, s_start, #full_line, "ProjectsMeta" }
-      end
-    end
-
-    if not st.show_all_commits and #author_stats > 3 then
-      local diff_authors = #author_stats - 3
-      local a_more = "   " .. ((diff_authors == 1) and i18n.t("team_more_1") or i18n.t("team_more", diff_authors))
-      add(a_more, "ProjectsMeta")
-      local l_idx = #lines - 1
-      local c_marker = i18n.t("press_c")
-      local c_pos = a_more:find(c_marker, 1, true)
-      if c_pos then
-        hls[#hls + 1] = { l_idx, c_pos + #c_marker - 1, c_pos + #c_marker, "ProjectsKeyText" }
-      end
-    end
-  end
+    emit_authors(false)
 
   if not (p.is_missing or p.is_disconnected) then
     add("")
