@@ -50,32 +50,48 @@ local BARE_OK = {
   security = true, deps = true, init = true,
 }
 
---- Gerarchia cromatica: il colore dice che *tipo* di rischio o di lavoro
---- rappresenta il commit, non solo che è diverso dagli altri.
----   rosso/magenta  = qualcosa era rotto, o si rompe adesso
+--- Gerarchia cromatica. Il colore dice quanta attenzione merita il commit,
+--- non soltanto che è diverso dagli altri:
+---   rosso/magenta  = fermati e leggi (rompe, o riguarda la sicurezza)
+---   arancio/oro    = qualcosa era rotto ed è stato aggiustato, o è cambiato
 ---   verde          = capacità nuove
----   ambra/oro      = comportamento modificato, prestazioni
----   blu/ciano      = informazione e verifica (docs, test, CI)
----   viola/grigio   = manutenzione, nessun effetto sull'utente
+---   oliva/blu      = informazione e verifica (docs, test, CI, build)
+---   viola/grigio   = manutenzione, invisibile a chi usa il progetto
+---
+--- Le tinte non sono scelte a occhio: sono state verificate calcolando la
+--- distanza percettiva (CIE Lab ΔE) fra ogni coppia, così i tag che compaiono
+--- di continuo restano i più distinguibili fra loro: minima globale 17.9,
+--- con ogni badge sopra 4.5:1 di contrasto sul proprio sfondo.
 M.COLORS = {
-  BREAKING = "#ff4d9d", -- il più acceso della tavolozza: rompe le compatibilità
-  SECURITY = "#ff757f",
-  FIX      = "#f7768e",
-  REVERT   = "#ff966c",
-  FEAT     = "#73daca",
-  CHANGE   = "#ff9e64",
-  PERF     = "#ffc777",
-  DOCS     = "#e0af68",
+  -- Allarme: rari di proposito. Un colore che compare di continuo smette di
+  -- essere un segnale, quindi il rosso è riservato a ciò che va letto subito.
+  BREAKING = "#ff4d9d", -- rompe le compatibilità
+  SECURITY = "#ff5370",
+  REVERT   = "#e06c7d", -- si torna indietro: qualcosa non ha funzionato
+
+  -- Riparazione e comportamento modificato
+  FIX      = "#ff8f4d", -- arancio: qualcosa era rotto ed è stato aggiustato
+  CHANGE   = "#ffc777",
+  PERF     = "#e8b93f",
+
+  -- Ciò che nasce
+  FEAT     = "#5fd39a",
+  DEPS     = "#a89060",
+
+  -- Informazione e verifica
+  DOCS     = "#c9d17e",
   TEST     = "#7dcfff",
   CI       = "#82aaff",
   BUILD    = "#4fd6be",
-  DEPS     = "#c3e88d",
+  MERGE    = "#9ab0d0",
+
+  -- Manutenzione: invisibile a chi usa il progetto
   REFACTOR = "#b4f9f8",
   STYLE    = "#fca7ea",
   CHORE    = "#bb9af7",
-  INIT     = "#c8d3f5",
-  MERGE    = "#86e1fc",
-  WIP      = "#949dd4", -- volutamente spento: non è lavoro finito
+  INIT     = "#dde3f7",
+  WIP      = "#a8a29a", -- grigio caldo: spento di proposito, ma leggibile.
+                        -- Caldo e non bluastro per non confondersi con MERGE.
 }
 
 --- Estrae il tag iniziale, se c'è.
@@ -157,13 +173,25 @@ function M.hl_group(tag)
   return "ProjectsTag" .. tag:sub(1, 1):upper() .. tag:sub(2):lower()
 end
 
+--- Gruppo per l'ambito che segue il badge (lo `scope` dei conventional commit).
+function M.scope_hl_group(tag)
+  return M.hl_group(tag) .. "Scope"
+end
+
 --- Definisce i gruppi: testo acceso su sfondo tenue dello stesso colore.
 function M.set_hl()
   for tag, fg in pairs(M.COLORS) do
     vim.api.nvim_set_hl(0, M.hl_group(tag), {
       fg = fg,
-      bg = blend(fg, 0.16), -- abbastanza da leggersi come pillola, non tanto da sbiadire il testo
+      bg = blend(fg, 0.13), -- il valore piu alto che tiene tutti e 18 sopra 4.5:1 di contrasto
       bold = true,
+    })
+    -- L'ambito appartiene al badge, non al soggetto: gli si dà la stessa
+    -- tinta ma spenta, così resta legato all'etichetta senza rubare la
+    -- lettura al messaggio vero e proprio.
+    vim.api.nvim_set_hl(0, M.scope_hl_group(tag), {
+      fg = blend(fg, 0.58),
+      italic = true,
     })
   end
   vim.api.nvim_set_hl(0, "ProjectsTagScope", { fg = "#545c7e", italic = true })

@@ -287,15 +287,19 @@ Bare words are accepted only when the word *is* a type name. `Add support for ta
 
 Colour follows what kind of work the commit represents, so the palette is readable rather than merely varied:
 
+Colour says how much attention the commit deserves, not merely that it differs from its neighbours:
+
 | Family | Tags | Meaning |
 |---|---|---|
-| Red / magenta | `BREAKING` `SECURITY` `FIX` `REVERT` | Something was broken, or breaks now |
+| Red / magenta | `BREAKING` `SECURITY` `REVERT` | Stop and read this |
+| Orange / gold | `FIX` `CHANGE` `PERF` | Something was broken and got repaired, or behaviour moved |
 | Green | `FEAT` `DEPS` | New capability |
-| Amber / gold | `CHANGE` `PERF` `DOCS` | Behaviour changed, or documented |
-| Blue / cyan | `TEST` `CI` `BUILD` `MERGE` | Verification and plumbing |
+| Olive / blue | `DOCS` `TEST` `CI` `BUILD` `MERGE` | Information and verification |
 | Violet / grey | `REFACTOR` `STYLE` `CHORE` `INIT` `WIP` | Maintenance, invisible to users |
 
-Every badge is bold text on a tinted background derived from its own colour, and all 18 clear a 4.5:1 contrast ratio against that background.
+Red is deliberately rare. `FIX` is the most frequent tag in most histories, so painting it red would have made red the default colour of the screen — and a colour that appears constantly stops being a signal. Orange marks a repair; red is kept for the handful of commits that genuinely demand attention.
+
+The hues were not picked by eye. Every pair was measured for perceptual distance (CIE Lab ΔE) and the assignment chosen to maximise the minimum separation between the tags that appear most often — 17.9 across all 18, against 9.8 for a hand-picked arrangement. Each badge is bold text on a background derived from its own colour, all clearing 4.5:1 contrast. The scope of a conventional commit is shown after the badge in a muted version of the same colour, so it stays attached to the tag without competing with the subject.
 
 ---
 

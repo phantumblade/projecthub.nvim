@@ -1292,7 +1292,8 @@ local function render_inspector(st)
 
     if #scope_txt > 0 then
       local c_scope_end = c0 + #scope_txt
-      hls[#hls + 1] = { row_idx, c0, c_scope_end, "ProjectsTagScope" }
+      hls[#hls + 1] = { row_idx, c0, c_scope_end,
+        tag and commit_tags.scope_hl_group(tag) or "ProjectsTagScope" }
       c0 = c_scope_end
     end
 
