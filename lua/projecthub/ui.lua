@@ -1239,7 +1239,9 @@ local function render_inspector(st)
       tag_gap = " "
       tag_hl = commit_tags.hl_group(tag)
       subject = rest
-      if scope then scope_txt = scope .. " · " end
+      -- Nessun separatore fra ambito e soggetto: li distingue già il colore,
+      -- e il puntino costava due colonne su ogni riga di commit.
+      if scope then scope_txt = scope .. " " end
     end
 
     local indent = "   "

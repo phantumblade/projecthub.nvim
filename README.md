@@ -299,7 +299,7 @@ Colour says how much attention the commit deserves, not merely that it differs f
 
 Red is deliberately rare. `FIX` is the most frequent tag in most histories, so painting it red would have made red the default colour of the screen — and a colour that appears constantly stops being a signal. Orange marks a repair; red is kept for the handful of commits that genuinely demand attention.
 
-The hues were not picked by eye. Every pair was measured for perceptual distance (CIE Lab ΔE) and the assignment chosen to maximise the minimum separation between the tags that appear most often — 17.9 across all 18, against 9.8 for a hand-picked arrangement. Each badge is bold text on a background derived from its own colour, all clearing 4.5:1 contrast. The scope of a conventional commit is shown after the badge in a muted version of the same colour, so it stays attached to the tag without competing with the subject.
+The hues were not picked by eye. Every pair was measured for perceptual distance (CIE Lab ΔE) and the assignment chosen to maximise the minimum separation between the tags that appear most often — 17.9 across all 18, against 9.8 for a hand-picked arrangement. Each badge is bold text on a background derived from its own colour, all clearing 4.5:1 contrast. The scope of a conventional commit is shown after the badge in a muted version of the same colour, so it stays attached to the tag without competing with the subject. No separator sits between them — the colour already tells them apart, and a divider would cost two columns of subject on every row.
 
 ---
 
