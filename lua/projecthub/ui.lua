@@ -2745,7 +2745,16 @@ render_list = function(st, is_marquee_tick)
   vim.bo[st.list.buf].modifiable = false
 
   if saved_list_view and vim.api.nvim_win_is_valid(win) then
-    pcall(vim.api.nvim_win_call, win, function() vim.fn.winrestview(saved_list_view) end)
+    pcall(vim.api.nvim_win_call, win, function()
+      -- Stessa ragione: un cursore fuori dalla finestra ripristinata
+      -- trascinerebbe indietro lo scorrimento. Lo si riporta nel intervallo
+      -- visibile prima di ripristinare, senza spostare la vista.
+      local top = saved_list_view.topline or 1
+      local last = vim.api.nvim_buf_line_count(st.list.buf)
+      local bottom = math.min(last, top + h - 1)
+      saved_list_view.lnum = math.max(top, math.min(bottom, saved_list_view.lnum or top))
+      vim.fn.winrestview(saved_list_view)
+    end)
   end
 
   vim.api.nvim_buf_clear_namespace(st.list.buf, ns, 0, -1)
@@ -3898,7 +3907,10 @@ function M.open()
           local target_top = math.floor(ratio * (max_content - h)) + 1
           target_top = math.max(1, math.min(max_content - h + 1, target_top))
           vim.api.nvim_win_call(st.list.win, function()
-            vim.fn.winrestview({ topline = target_top })
+            -- Il cursore va portato con la vista: winrestview dà la precedenza
+            -- a lnum, quindi lasciandolo indietro topline verrebbe riportato
+            -- su per inquadrarlo, annullando il trascinamento.
+            vim.fn.winrestview({ topline = target_top, lnum = target_top, col = 0 })
           end)
           sync_sel_with_scroll(st)
           return
