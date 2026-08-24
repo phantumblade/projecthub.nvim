@@ -85,10 +85,14 @@ M.defaults = {
   stars = {
     enabled = false,   -- true per avviare la sorveglianza all'apertura di Neovim
     interval = 120,    -- secondi fra un controllo e l'altro (minimo 30)
+    scope = "owner",   -- quali repo sorvegliare:
+                       --   "owner"       solo quelli che possiedi (più economico)
+                       --   "contributor" i tuoi, più quelli altrui in cui hai
+                       --                 almeno un commit (collaboratore attivo)
+                       --   "all"         tutto ciò a cui hai accesso
     owners = {},       -- account da sorvegliare; vuoto = quello autenticato con gh
     color = "#E3B341", -- colore d'accento del riquadro (bordo, titolo, stella)
     title = nil,       -- testo del titolo; nil = usa quello tradotto
-    duration = 8000,   -- millisecondi di permanenza a schermo
     sound = "achievement", -- nome del suono, oppure false per notificare in silenzio
   },
 

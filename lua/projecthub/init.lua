@@ -65,8 +65,8 @@ function M.register_commands()
     elseif arg == "rehearse" or arg == "live" then
       S.rehearse()
     else
-      vim.notify("Uso: :PHStars [status|start|stop|toggle|check|demo|rehearse]", vim.log.levels.WARN,
-        { title = "ProjectHub" })
+      require("projecthub.notify").notify(
+        "Uso: :PHStars [status|start|stop|toggle|check|demo|rehearse]", nil, "warn", "error")
     end
   end
 
@@ -134,8 +134,7 @@ function M.set_language(lang)
   end
 
   local i18n = require("projecthub.i18n")
-  local msg = i18n.t("notify_lang_switched")
-  vim.notify(msg, vim.log.levels.INFO, { title = "ProjectHub", icon = "󰗊 " })
+  require("projecthub.notify").notify(i18n.t("notify_lang_switched"), nil, "toggle", "toggle")
 
   local ui = require("projecthub.ui")
   if ui.is_open and ui.is_open() then
@@ -158,14 +157,17 @@ function M.stars_status()
   local S = require("projecthub.stars")
   local i18n = require("projecthub.i18n")
   local s = S.status()
+  local count = (s.total == 1) and i18n.t("star_count_one")
+      or string.format(i18n.t("star_count_many"), s.total)
   local head = s.running
-      and string.format(i18n.t("star_status_on"), s.tracked, s.total, s.interval)
-      or string.format(i18n.t("star_status_off"), s.tracked, s.total)
+      and string.format(i18n.t("star_status_on"), s.tracked, count, s.interval)
+      or string.format(i18n.t("star_status_off"), s.tracked, count)
   local when = s.last_check and os.date("%H:%M:%S", s.last_check) or i18n.t("star_status_never")
-  vim.notify(
-    head .. " · " .. string.format(i18n.t("star_status_last"), when),
-    vim.log.levels.INFO,
-    { title = "ProjectHub", icon = "\u{f005} " }
+  require("projecthub.notify").notify(
+    head,
+    string.format(i18n.t("star_status_last"), when),
+    "achievement",
+    nil
   )
   return s
 end

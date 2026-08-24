@@ -127,14 +127,19 @@ function M.toggle()
   local target = not current
 
   local i18n = require("projecthub.i18n")
+  -- require pigro: projecthub.notify richiede questo modulo a sua volta,
+  -- e caricarlo in cima al file creerebbe una dipendenza circolare.
+  local notify = require("projecthub.notify")
   if target then
     M.set_enabled(true)
     M.play("toggle_on")
-    vim.notify(i18n.t("notify_sound_enabled"), vim.log.levels.INFO, { title = "Sound FX", icon = " " })
+    notify.notify(i18n.t("notify_sound_enabled"), nil, "toggle", nil)
   else
+    -- Il suono di spegnimento va riprodotto *prima* di disattivare l'audio,
+    -- altrimenti si spegne senza farsi sentire.
     M.play("toggle_off", true)
     M.set_enabled(false)
-    vim.notify(i18n.t("notify_sound_disabled"), vim.log.levels.WARN, { title = "Sound FX", icon = "󰝟 " })
+    notify.notify(i18n.t("notify_sound_disabled"), nil, "warn", nil)
   end
 
   if package.loaded["snacks"] and _G.Snacks and _G.Snacks.dashboard and _G.Snacks.dashboard.update then

@@ -457,70 +457,9 @@ local function add_extra_result_text(code, arg)
   return i18n.t(keys[1]), i18n.t(keys[2], arg)
 end
 
-local NOTIFY_THEMES = {
-  success = {
-    level = vim.log.levels.INFO,
-    icon = "\u{f012c} ",
-    hl = { border = "DiagnosticOk", title = "DiagnosticOk", icon = "DiagnosticOk" },
-  },
-  delete = {
-    level = vim.log.levels.WARN,
-    icon = "\u{f0a79} ",
-    hl = { border = "DiagnosticError", title = "DiagnosticError", icon = "DiagnosticError" },
-  },
-  connect = {
-    level = vim.log.levels.INFO,
-    icon = "\u{f06d2} ",
-    hl = { border = "DiagnosticInfo", title = "DiagnosticInfo", icon = "DiagnosticInfo" },
-  },
-  checkpoint = {
-    level = vim.log.levels.INFO,
-    icon = "\u{f082e} ",
-    hl = { border = "DiagnosticWarn", title = "DiagnosticWarn", icon = "DiagnosticWarn" },
-  },
-  snap = {
-    level = vim.log.levels.INFO,
-    icon = "\u{f02a2} ",
-    hl = { border = "DiagnosticHint", title = "DiagnosticHint", icon = "DiagnosticHint" },
-  },
-  toggle = {
-    level = vim.log.levels.INFO,
-    icon = "\u{f075a} ",
-    hl = { border = "DiagnosticInfo", title = "DiagnosticInfo", icon = "DiagnosticInfo" },
-  },
-  open = {
-    level = vim.log.levels.INFO,
-    icon = "\u{f059f} ",
-    hl = { border = "DiagnosticInfo", title = "DiagnosticInfo", icon = "DiagnosticInfo" },
-  },
-  warn = {
-    level = vim.log.levels.WARN,
-    icon = "\u{f0028} ",
-    hl = { border = "DiagnosticWarn", title = "DiagnosticWarn", icon = "DiagnosticWarn" },
-  },
-  error = {
-    level = vim.log.levels.ERROR,
-    icon = "\u{f0156} ",
-    hl = { border = "DiagnosticError", title = "DiagnosticError", icon = "DiagnosticError" },
-  },
-}
-
-local function notify(title_text, msg_text, theme_name, sound_ev)
-  if sound_ev then
-    sound.play(sound_ev)
-  end
-  local theme = NOTIFY_THEMES[theme_name or "success"] or NOTIFY_THEMES.success
-  local full_msg = title_text or ""
-  if msg_text and msg_text ~= "" and msg_text ~= title_text then
-    full_msg = title_text .. "\n" .. msg_text
-  end
-
-  vim.notify(full_msg, theme.level, {
-    title = "ProjectHub",
-    icon = theme.icon,
-    hl = theme.hl,
-  })
-end
+local notify_mod = require("projecthub.notify")
+local NOTIFY_THEMES = notify_mod.themes
+local notify = notify_mod.notify
 
 local function get_author_pill_hl(author_name)
   local clean = tostring(author_name or "user"):lower():gsub("[%s%-_%./\\]", "")

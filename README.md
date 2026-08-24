@@ -40,7 +40,7 @@
 - **Scratchpad Notes (`n`)**: Dedicated per-project persistent notes editor.
 - **README & Web Previews**: Embedded Markdown preview (`s`) or browser preview (`w`).
 - **UI Sound Effects**: Subtle audio feedback on typing, selection and notifications, bundled with the plugin (no downloads, no external player to install beyond what your OS already provides). Toggle at runtime with `:ProjectHubSound`, or set `sound.enabled = false`. Volume is configurable and the choice is remembered across restarts.
-- **Live Star Watcher**: Opt in and ProjectHub keeps an eye on your own GitHub repositories in the background. The moment one of them picks up a star, a coloured panel slides in at the top right naming the repo, the new total and *who* starred it, with an `achievement` chime. Colour, title text, poll interval and duration are all configurable. See [Star Watcher](#star-watcher).
+- **Live Star Watcher**: Opt in and ProjectHub keeps an eye on your GitHub repositories in the background. The moment one picks up a star, you get a ProjectHub notification — same shape as every other one the plugin shows — in achievement gold, naming the repo, the new total and *who* starred it, with an `achievement` chime. Choose whether to watch only what you own, or also repos you actively contribute to. See [Star Watcher](#star-watcher).
 - **Bilingual (EN / IT)**: Switch language at runtime (`L` / `:ProjectHubLang`) or via config.
 - **Full Mouse & Keyboard Support**: Smooth scrolling with wheel, scrollbar dragging, and responsive single/two-column layouts.
 
@@ -207,11 +207,11 @@ require("projecthub").setup({
   -- the network on its own unless you enable this. Requires `gh` authenticated.
   stars = {
     enabled = false,        -- Start watching when Neovim opens
+    scope = "owner",        -- "owner" | "contributor" | "all"
     interval = 120,         -- Seconds between checks (minimum 30)
     owners = {},            -- Accounts to watch; empty = whoever `gh` is logged in as
     color = "#E3B341",      -- Accent colour: border, title and star
     title = nil,            -- Custom title text; nil uses the translated one
-    duration = 8000,        -- Milliseconds the panel stays on screen
     sound = "achievement",  -- Sound name, or false to notify silently
   },
 
@@ -266,17 +266,41 @@ It is **off by default**: the plugin does not reach out to the network on its ow
 require("projecthub").setup({
   stars = {
     enabled  = true,          -- start watching when Neovim opens
+    scope    = "owner",       -- "owner" | "contributor" | "all"  (see below)
     interval = 120,           -- seconds between checks (minimum 30)
     owners   = {},            -- accounts to watch; empty = whoever `gh` is logged in as
-    color    = "#E3B341",     -- accent colour: border, title and star
+    color    = "#E3B341",     -- accent colour for the notification
     title    = nil,           -- custom title text; nil uses the translated one
-    duration = 8000,          -- milliseconds on screen
     sound    = "achievement", -- sound name, or false to notify silently
   },
 })
 ```
 
 At 120 seconds that is 30 API calls an hour against an authenticated limit of 5,000, so the budget is never a concern. The first run only records a baseline — it will not fire a notification for stars you already had.
+
+The notification goes through the same helper as every other ProjectHub message, so it carries the familiar `ProjectHub` title and border, distinguished by a trophy icon and the achievement gold. Notifiers that support highlight overrides (snacks.nvim among them) render the accent colour; with bare `vim.notify` you get the text and level, exactly as with every other notification the plugin sends.
+
+### Which repositories are watched
+
+`scope` decides what gets polled. It matters if you have more than one GitHub account, or contribute to repositories you do not own.
+
+| `scope` | Watches | Cost |
+|---|---|---|
+| `"owner"` *(default)* | Only repositories the account owns — including private ones for the account `gh` is logged in as. | One API call per account, per check. |
+| `"contributor"` | The above, **plus** repositories owned by others where you have at least one commit. A collaborator seat alone is not enough: you have to have actually pushed. | Same, plus a one-off eligibility check per foreign repository, cached on disk for 24 hours. |
+| `"all"` | Everything you have access to: owned, collaborator, and organization repositories, with no contribution filter. | One API call per account, per check. |
+
+To watch more than one account, list them:
+
+```lua
+stars = { owners = { "your-personal-handle", "your-work-handle" } }
+```
+
+For the account `gh` is authenticated as, ProjectHub uses the authenticated endpoint, so private repositories are covered too. For any *other* account it can only see public repositories — GitHub will not reveal more without that account's own credentials. Since stars only accrue on public repositories in practice, this is rarely a limitation.
+
+`:PHStars` prints the active scope along with the counts. If you change scope, or gain a commit in a repository that was previously excluded, run `:lua require("projecthub.stars").reset_scope_cache()` to re-evaluate immediately instead of waiting for the 24-hour cache to lapse.
+
+Not interested at all? Leave `enabled = false` (the default) and nothing is ever polled — the watcher makes no network request unless you turn it on.
 
 ### Seeing it live
 
@@ -325,6 +349,7 @@ ProjectHub stores custom projects, persistent notes, recents, and Git metadata c
   ├── github_meta.json
   ├── notes.json
   ├── stars.json
+  ├── stars_scope.json
   └── recents.json
 ```
 Nothing is ever written into your dotfiles or repository folders.
