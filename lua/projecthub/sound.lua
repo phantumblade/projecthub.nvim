@@ -13,6 +13,8 @@ local SOUND_MAP = {
   error = "error",
   select = "select",
   typing = "typing",
+  achievement = "achievement",
+  star = "achievement",
 }
 
 local last_typing_time = 0
@@ -34,7 +36,7 @@ local function get_sound_file(name)
 end
 
 --- Riproduce un effetto sonoro in background in modo asincrono (0ms di blocco UI).
---- @param event string Identificatore del suono ("success", "delete", "connect", "checkpoint", "snap", "toggle", "open", "error", "select", "typing")
+--- @param event string Identificatore del suono ("success", "delete", "connect", "checkpoint", "snap", "toggle", "open", "error", "select", "typing", "achievement")
 --- @param force? boolean Se true, riproduce anche se sound è disabilitato (usato per toggle_off)
 function M.play(event, force)
   local ok, config = pcall(require, "projecthub.config")

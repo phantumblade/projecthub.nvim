@@ -79,6 +79,19 @@ M.defaults = {
     volume = 0.40,  -- volume morbido e bilanciato da 0.0 a 1.0
   },
 
+  -- Sorveglianza delle stelle sui tuoi repository GitHub. Richiede la CLI `gh`
+  -- autenticata (`gh auth login`). Quando uno dei tuoi repo riceve una stella
+  -- compare un riquadro in alto a destra accompagnato dal suono "achievement".
+  stars = {
+    enabled = false,   -- true per avviare la sorveglianza all'apertura di Neovim
+    interval = 120,    -- secondi fra un controllo e l'altro (minimo 30)
+    owners = {},       -- account da sorvegliare; vuoto = quello autenticato con gh
+    color = "#E3B341", -- colore d'accento del riquadro (bordo, titolo, stella)
+    title = nil,       -- testo del titolo; nil = usa quello tradotto
+    duration = 8000,   -- millisecondi di permanenza a schermo
+    sound = "achievement", -- nome del suono, oppure false per notificare in silenzio
+  },
+
   -- Callback invocata quando apri un progetto (tasto Enter). Riceve il
   -- percorso assoluto. Se nil, usa il comportamento di default: `tcd` nella
   -- cartella, poi ripristina la sessione con persistence.nvim se disponibile,

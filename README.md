@@ -40,6 +40,7 @@
 - **Scratchpad Notes (`n`)**: Dedicated per-project persistent notes editor.
 - **README & Web Previews**: Embedded Markdown preview (`s`) or browser preview (`w`).
 - **UI Sound Effects**: Subtle audio feedback on typing, selection and notifications, bundled with the plugin (no downloads, no external player to install beyond what your OS already provides). Toggle at runtime with `:ProjectHubSound`, or set `sound.enabled = false`. Volume is configurable and the choice is remembered across restarts.
+- **Live Star Watcher**: Opt in and ProjectHub keeps an eye on your own GitHub repositories in the background. The moment one of them picks up a star, a coloured panel slides in at the top right naming the repo, the new total and *who* starred it, with an `achievement` chime. Colour, title text, poll interval and duration are all configurable. See [Star Watcher](#star-watcher).
 - **Bilingual (EN / IT)**: Switch language at runtime (`L` / `:ProjectHubLang`) or via config.
 - **Full Mouse & Keyboard Support**: Smooth scrolling with wheel, scrollbar dragging, and responsive single/two-column layouts.
 
@@ -76,7 +77,7 @@
 - A **[Nerd Font](https://www.nerdfonts.com/)** for terminal icons
 
 ### Optional Integrations
-- **[`gh` (GitHub CLI)](https://cli.github.com/)**: GitHub stars, forks, and visibility metadata.
+- **[`gh` (GitHub CLI)](https://cli.github.com/)**: GitHub stars, forks, and visibility metadata. Also required by the [star watcher](#star-watcher), which needs it authenticated (`gh auth login`).
 - **An audio player, for the sound effects**: macOS already ships `afplay`, so nothing to install. On Linux any one of `pw-play`, `paplay`, `mpv` or `ffplay` is used, whichever is found first. On Windows `ffplay`, falling back to PowerShell. Without any of them the plugin simply stays silent.
 - **[`nvim-neo-tree/neo-tree.nvim`](https://github.com/nvim-neo-tree/neo-tree.nvim)**: Opened automatically on the left when opening a project.
 - **[`MeanderingProgrammer/render-markdown.nvim`](https://github.com/MeanderingProgrammer/render-markdown.nvim)**: Formatted Markdown preview.
@@ -202,6 +203,18 @@ require("projecthub").setup({
     volume = 0.5,       -- Volume level (0.0 to 1.0)
   },
 
+  -- GitHub star watcher. Off by default: the plugin will not reach out to
+  -- the network on its own unless you enable this. Requires `gh` authenticated.
+  stars = {
+    enabled = false,        -- Start watching when Neovim opens
+    interval = 120,         -- Seconds between checks (minimum 30)
+    owners = {},            -- Accounts to watch; empty = whoever `gh` is logged in as
+    color = "#E3B341",      -- Accent colour: border, title and star
+    title = nil,            -- Custom title text; nil uses the translated one
+    duration = 8000,        -- Milliseconds the panel stays on screen
+    sound = "achievement",  -- Sound name, or false to notify silently
+  },
+
   -- Custom open callback. If nil, defaults to:
   -- changing cwd (`cd`), opening README.md in main buffer, and opening Neo-tree.
   on_open = nil,
@@ -216,6 +229,10 @@ require("projecthub").setup({
 - `:ProjectHub` (or `:PH`) — Open the ProjectHub dashboard.
 - `:ProjectHubLang [it|en]` (or `:PHLang`) — Switch interface language.
 - `:ProjectHubSound` (or `:PHSound`) — Toggle UI sound effects ON / OFF.
+- `:PHStars [status|start|stop|toggle|check|demo|rehearse]` (or `:ProjectHubStars`) — Control the GitHub star watcher. With no argument, prints its status.
+- `:PHStarsDemo` — Show a fake star notification: tests colours, text and sound offline.
+- `:PHStarsCheck` — Poll GitHub for new stars right now.
+- `:PHStarsRehearse [owner/repo]` — Live end-to-end rehearsal against the real GitHub API.
 
 ### Dashboard Keybindings
 
@@ -236,6 +253,48 @@ require("projecthub").setup({
 | `L` | **Language** | Switch UI language instantly between English and Italian |
 | `q` / `<Esc>` | **Quit** | Close the dashboard or dismiss the current modal |
 | `<ScrollWheel>` | **Mouse Scroll** | Scroll cards list or inspector preview with inertia |
+
+---
+
+## Star Watcher
+
+GitHub has no push channel for stars without a webhook and a server to receive it, so ProjectHub polls instead. One `gh api` call per account returns every repository with its star count; that is compared against a snapshot on disk. When a count goes up, a second call fetches the most recent stargazer so the notification can name them. Everything runs through `jobstart` — no call ever blocks the editor.
+
+It is **off by default**: the plugin does not reach out to the network on its own unless you ask it to.
+
+```lua
+require("projecthub").setup({
+  stars = {
+    enabled  = true,          -- start watching when Neovim opens
+    interval = 120,           -- seconds between checks (minimum 30)
+    owners   = {},            -- accounts to watch; empty = whoever `gh` is logged in as
+    color    = "#E3B341",     -- accent colour: border, title and star
+    title    = nil,           -- custom title text; nil uses the translated one
+    duration = 8000,          -- milliseconds on screen
+    sound    = "achievement", -- sound name, or false to notify silently
+  },
+})
+```
+
+At 120 seconds that is 30 API calls an hour against an authenticated limit of 5,000, so the budget is never a concern. The first run only records a baseline — it will not fire a notification for stars you already had.
+
+### Seeing it live
+
+Three levels of testing, from cheapest to most real:
+
+| Command | What it exercises |
+|---|---|
+| `:PHStarsDemo` | The panel and the sound only. No network. Instant. |
+| `:PHStarsCheck` | A real poll, right now, instead of waiting for the timer. |
+| `:PHStarsRehearse` | **The full live path.** |
+
+`:PHStarsRehearse` is the interesting one. It rewinds the stored count for one of your repositories by a single star, then forces a check — so the watcher sees a genuine increase and walks the entire chain for real: the GitHub API call, the diff, the stargazer lookup, the notification, the sound. The name it shows you is the actual person who starred that repo. No second GitHub account needed, and your real star count is restored by the same check that reports it.
+
+Pass a repository explicitly if you want a specific one:
+
+```vim
+:PHStarsRehearse phantumblade/projecthub.nvim
+```
 
 ---
 
@@ -265,6 +324,7 @@ ProjectHub stores custom projects, persistent notes, recents, and Git metadata c
   ├── custom_projects.json
   ├── github_meta.json
   ├── notes.json
+  ├── stars.json
   └── recents.json
 ```
 Nothing is ever written into your dotfiles or repository folders.
