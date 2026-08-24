@@ -46,6 +46,19 @@ function M.register_commands()
   pcall(vim.api.nvim_create_user_command, "PHl", lang_cmd, lang_opts)
   pcall(vim.api.nvim_create_user_command, "Phl", lang_cmd, lang_opts)
 
+  -- Anteprima di tutte le notifiche del plugin
+  local notify_cmd = function(o)
+    local want_sound = (vim.trim(o.args or ""):lower() == "sound")
+    require("projecthub.notify").preview(want_sound)
+  end
+  local notify_opts = {
+    nargs = "?",
+    complete = function() return { "sound" } end,
+    desc = "Preview every ProjectHub notification theme",
+  }
+  pcall(vim.api.nvim_create_user_command, "ProjectHubNotify", notify_cmd, notify_opts)
+  pcall(vim.api.nvim_create_user_command, "PHNotify", notify_cmd, notify_opts)
+
   -- Sorveglianza delle stelle GitHub
   local stars_cmd = function(o)
     local arg = (o.args and vim.trim(o.args) or ""):lower()

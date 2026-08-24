@@ -97,7 +97,15 @@ Create a new plugin file in your Neovim config (e.g. `~/.config/nvim/lua/plugins
 ```lua
 return {
   "phantumblade/projecthub.nvim",
-  cmd = { "ProjectHub", "PH", "ProjectHubLang", "PHLang" },
+  -- Every command that should work before the dashboard has been opened once
+  -- must be listed here, otherwise lazy.nvim has nothing to load the plugin on.
+  cmd = {
+    "ProjectHub", "PH",
+    "ProjectHubLang", "PHLang", "PHl",
+    "ProjectHubSound", "PHSound",
+    "ProjectHubStars", "PHStars", "PHStarsDemo", "PHStarsCheck", "PHStarsRehearse",
+    "ProjectHubNotify", "PHNotify",
+  },
   keys = {
     { "<leader>p", "<cmd>ProjectHub<cr>", desc = "ProjectHub Dashboard" },
   },
@@ -233,6 +241,7 @@ require("projecthub").setup({
 - `:PHStarsDemo` — Show a fake star notification: tests colours, text and sound offline.
 - `:PHStarsCheck` — Poll GitHub for new stars right now.
 - `:PHStarsRehearse [owner/repo]` — Live end-to-end rehearsal against the real GitHub API.
+- `:PHNotify [sound]` (or `:ProjectHubNotify`) — Show every notification theme at once. Add `sound` to hear each one too.
 
 ### Dashboard Keybindings
 
@@ -253,6 +262,31 @@ require("projecthub").setup({
 | `L` | **Language** | Switch UI language instantly between English and Italian |
 | `q` / `<Esc>` | **Quit** | Close the dashboard or dismiss the current modal |
 | `<ScrollWheel>` | **Mouse Scroll** | Scroll cards list or inspector preview with inertia |
+
+---
+
+## Notifications
+
+Everything ProjectHub tells you goes through one helper, so every message has the same shape: a `ProjectHub` title, a rounded border, and an icon that says what kind of message it is. There are ten themes:
+
+| Theme | Icon | Used for |
+|---|---|---|
+| `success` | `nf-md-check-circle` | Scans finished, projects added |
+| `achievement` | `nf-md-trophy` | GitHub stars — gold accent |
+| `checkpoint` | `nf-md-content-save-check` | Project notes saved |
+| `connect` | `nf-md-link-variant` | A moved project reconnected |
+| `snap` | `nf-md-git` | A repository's Git state changed |
+| `toggle` | `nf-md-toggle-switch` | Language, audio, star watcher on/off |
+| `open` | `nf-md-web` | Web previews and GitHub links |
+| `delete` | `nf-md-trash-can` | A project or note removed |
+| `warn` | `nf-md-alert` | Something missing, but not fatal |
+| `error` | `nf-md-close-circle` | An operation failed |
+
+Every icon is a Nerd Font glyph from the Material Design set (`nf-md-*`) — no emoji anywhere in the interface, so the whole plugin renders in one typeface at one weight.
+
+**To see them all**, run `:PHNotify`. Each theme appears in turn with its name and what it is used for. `:PHNotify sound` spaces them out further and plays the sound attached to each, which is the quickest way to audition the audio set.
+
+Colours come from the `hl` overrides the theme carries. Notifiers that support them (snacks.nvim among them) render them; with bare `vim.notify` you get the text and the level, which is the same trade-off for every message the plugin sends.
 
 ---
 

@@ -64,7 +64,7 @@ M.themes = {
   -- non deve confondersi con un normale avviso informativo.
   achievement = {
     level = vim.log.levels.INFO,
-    icon = "\u{f091} ", -- nf-fa-trophy
+    icon = "\u{f0669} ", -- nf-md-trophy, come tutte le altre icone di notifica
     hl = { border = "ProjectsAchievement", title = "ProjectsAchievement", icon = "ProjectsAchievement" },
   },
   error = {
@@ -89,6 +89,34 @@ function M.notify(title_text, msg_text, theme_name, sound_ev)
     icon = theme.icon,
     hl = theme.hl,
   })
+end
+
+--- Ordine di presentazione dei temi nell'anteprima: prima gli esiti
+--- positivi, poi le azioni, infine gli avvisi.
+M.preview_order = {
+  "success", "achievement", "checkpoint", "connect",
+  "snap", "toggle", "open", "delete", "warn", "error",
+}
+
+--- Mostra una notifica per ogni tema, così si vedono tutti affiancati.
+--- @param with_sound? boolean riproduce anche il suono associato a ciascun tema
+function M.preview(with_sound)
+  local i18n = require("projecthub.i18n")
+  local sounds = {
+    success = "success", achievement = "achievement", checkpoint = "checkpoint",
+    connect = "connect", snap = "snap", toggle = "toggle", open = "open",
+    delete = "delete", warn = "error", error = "error",
+  }
+  for i, name in ipairs(M.preview_order) do
+    vim.defer_fn(function()
+      M.notify(
+        string.format(i18n.t("notify_preview_title"), name),
+        i18n.t("notify_preview_body_" .. name) or "",
+        name,
+        with_sound and sounds[name] or nil
+      )
+    end, (i - 1) * (with_sound and 900 or 260))
+  end
 end
 
 return M
