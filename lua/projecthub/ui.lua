@@ -4,6 +4,7 @@ local P = require("projecthub.projects")
 local config = require("projecthub.config")
 local i18n = require("projecthub.i18n")
 local sound = require("projecthub.sound")
+local commit_tags = require("projecthub.commit_tags")
 
 local ICON_ERROR = "\u{f0156}"
 local ICON_SUCCESS = "\u{f012c}"
@@ -175,6 +176,9 @@ local function set_hl()
 
   vim.api.nvim_set_hl(0, "ProjectsGhostText", { fg = "#5c6370", italic = true, default = true })
 
+  -- Etichette dei commit: testo acceso su sfondo tenue dello stesso colore.
+  commit_tags.set_hl()
+
   -- Spunta "in pari con il remoto": verde fisso in ogni tema, così il segnale
   -- di sincronizzazione resta riconoscibile a colpo d'occhio.
   vim.api.nvim_set_hl(0, "ProjectsGitClean", { fg = "#3FB950", bold = true })
@@ -269,12 +273,6 @@ local function set_hl()
 
     ProjectsCommitHash = { fg = "#7aa2f7", bold = true },
     ProjectsCommitBranch = { fg = "#73daca" },
-    ProjectsTagFeat = { fg = "#73daca", bold = true },
-    ProjectsTagChange = { fg = "#ff9e64", bold = true },
-    ProjectsTagFix = { fg = "#f7768e", bold = true },
-    ProjectsTagChore = { fg = "#bb9af7", bold = true },
-    ProjectsTagDocs = { fg = "#e0af68", bold = true },
-    ProjectsTagRefactor = { fg = "#b4f9f8", bold = true },
     ProjectsCommitAuthor = { fg = "#2ac3de" },
     ProjectsCommitAuthorPill = { fg = "#7aa2f7", bg = "#273147", bold = true },
     ProjectsAuthorPill_1 = { fg = "#7aa2f7", bg = "#222a3d", bold = true },
@@ -1230,19 +1228,18 @@ local function render_inspector(st)
   local function add_commit_row(c, b_name, max_w)
     if not c then return end
     local subject = tostring(c.subject or "")
-    local tag_prefix = ""
-    local tag_hl = "ProjectsGitBranch"
+    -- Il badge porta lo sfondo, lo spazio dopo no: così il colore si ferma
+    -- sull'etichetta invece di colare sul testo che segue.
+    local tag_badge, tag_gap, scope_txt = "", "", ""
+    local tag_hl = nil
 
-    local tag_word, rest = subject:match("^(%A*%a+)%s+(.*)$")
-    if tag_word then
-      local tag_u = tag_word:upper()
-      if tag_u == "FEAT" then tag_prefix = "[FEAT] "; tag_hl = "ProjectsTagFeat"; subject = rest
-      elseif tag_u == "CHANGE" or tag_u == "CHANGED" then tag_prefix = "[CHANGE] "; tag_hl = "ProjectsTagChange"; subject = rest
-      elseif tag_u == "FIX" or tag_u == "FIXED" then tag_prefix = "[FIX] "; tag_hl = "ProjectsTagFix"; subject = rest
-      elseif tag_u == "CHORE" then tag_prefix = "[CHORE] "; tag_hl = "ProjectsTagChore"; subject = rest
-      elseif tag_u == "DOCS" or tag_u == "DOC" then tag_prefix = "[DOCS] "; tag_hl = "ProjectsTagDocs"; subject = rest
-      elseif tag_u == "REFACTOR" then tag_prefix = "[REFACTOR] "; tag_hl = "ProjectsTagRefactor"; subject = rest
-      end
+    local tag, scope, rest = commit_tags.parse(subject)
+    if tag then
+      tag_badge = " " .. tag .. " "
+      tag_gap = " "
+      tag_hl = commit_tags.hl_group(tag)
+      subject = rest
+      if scope then scope_txt = scope .. " · " end
     end
 
     local indent = "   "
@@ -1259,7 +1256,8 @@ local function render_inspector(st)
     local gap = (#author_pill > 0) and "  " or ""
     local right_block = date_str .. gap .. author_pill
 
-    local fixed_w = dw(indent) + dw(hash_str) + dw(b_str) + dw(tag_prefix) + dw(right_block)
+    local fixed_w = dw(indent) + dw(hash_str) + dw(b_str) + dw(tag_badge) + dw(tag_gap)
+        + dw(scope_txt) + dw(right_block)
     local avail_for_subj = max_w - fixed_w
 
     subject = subject:gsub("[%s%.…]+$", "")
@@ -1268,7 +1266,7 @@ local function render_inspector(st)
       subject = fit(subject, avail_for_subj)
     end
 
-    local left_line = indent .. hash_str .. b_str .. tag_prefix .. subject
+    local left_line = indent .. hash_str .. b_str .. tag_badge .. tag_gap .. scope_txt .. subject
     local space_fill = math.max(0, max_w - dw(left_line) - dw(right_block))
     local full_line = left_line .. string.rep(" ", space_fill) .. right_block
 
@@ -1286,10 +1284,16 @@ local function render_inspector(st)
     hls[#hls + 1] = { row_idx, c0, c_branch_end, "ProjectsCommitBranch" }
     c0 = c_branch_end
 
-    if #tag_prefix > 0 then
-      local c_tag_end = c0 + #tag_prefix
+    if #tag_badge > 0 then
+      local c_tag_end = c0 + #tag_badge
       hls[#hls + 1] = { row_idx, c0, c_tag_end, tag_hl }
-      c0 = c_tag_end
+      c0 = c_tag_end + #tag_gap
+    end
+
+    if #scope_txt > 0 then
+      local c_scope_end = c0 + #scope_txt
+      hls[#hls + 1] = { row_idx, c0, c_scope_end, "ProjectsTagScope" }
+      c0 = c_scope_end
     end
 
     if #subject > 0 then

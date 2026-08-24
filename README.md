@@ -30,7 +30,7 @@
   - Visibility tags: `PUBBLICO` (`PUBLIC`), `PRIVATO` (`PRIVATE`), `LOCALE` (`LOCAL`, `untracked`).
 - **Deep Inspector Panel**:
   - Asynchronous Lines-of-Code (LOC) calculator and file counter.
-  - Conventional Commits badges (`[FEAT]`, `[FIX]`, `[CHANGE]`, `[DOCS]`, `[CHORE]`, `[REFACTOR]`).
+  - Commit tag badges: `feat:`, `[FIX]`, `fix(core)!:`, `DOCS - …` and other common spellings are all recognised at the start of a subject and rendered as one uniform coloured badge, so you can find every fix in a long history by colour alone. 18 tags, coloured by what kind of risk the commit carries.
   - Infinite-scroll Git commit timeline (`c`) with automatic pagination (+100 commits).
   - Contributor breakdown with role icons (Owner, Organization, Member).
 - **Persistent GitHub Cache**: Authenticated `gh api` queries retrieve stars, forks, visibility, and parent forks with instant `0ms` startup cache saved to disk.
@@ -262,6 +262,40 @@ require("projecthub").setup({
 | `L` | **Language** | Switch UI language instantly between English and Italian |
 | `q` / `<Esc>` | **Quit** | Close the dashboard or dismiss the current modal |
 | `<ScrollWheel>` | **Mouse Scroll** | Scroll cards list or inspector preview with inertia |
+
+---
+
+## Commit Tag Badges
+
+The same commit type gets written a dozen different ways depending on the repository — `feat: …`, `[FEAT] …`, `fix(core)!: …`, `DOCS - …`. ProjectHub normalises all of them to a single uppercase badge, so scanning a long history for the fixes is a matter of looking for one colour rather than reading every line.
+
+Recognised forms, **at the start of the subject only** — a word like "fix" in the middle of a sentence stays plain text:
+
+| Written as | Badge |
+|---|---|
+| `feat: add the panel` | `FEAT` |
+| `feat(inspector): restore the view` | `FEAT` + dim `inspector` scope |
+| `fix(core)!: breaking change` | `FIX` |
+| `[FEAT] add the panel` | `FEAT` |
+| `(docs)` `{chore}` `<test>` | `DOCS` `CHORE` `TEST` |
+| `HOTFIX: urgent patch` | `FIX` |
+| `Docs - update the guide` | `DOCS` |
+| `chore \| cleanup` | `CHORE` |
+| `fix resolves the crash` | `FIX` |
+
+Bare words are accepted only when the word *is* a type name. `Add support for tags` and `Update the readme` stay plain, because those open perfectly ordinary sentences — an informal alias like `add` is only honoured when it is explicitly delimited, as in `[add] new feature`.
+
+Colour follows what kind of work the commit represents, so the palette is readable rather than merely varied:
+
+| Family | Tags | Meaning |
+|---|---|---|
+| Red / magenta | `BREAKING` `SECURITY` `FIX` `REVERT` | Something was broken, or breaks now |
+| Green | `FEAT` `DEPS` | New capability |
+| Amber / gold | `CHANGE` `PERF` `DOCS` | Behaviour changed, or documented |
+| Blue / cyan | `TEST` `CI` `BUILD` `MERGE` | Verification and plumbing |
+| Violet / grey | `REFACTOR` `STYLE` `CHORE` `INIT` `WIP` | Maintenance, invisible to users |
+
+Every badge is bold text on a tinted background derived from its own colour, and all 18 clear a 4.5:1 contrast ratio against that background.
 
 ---
 
