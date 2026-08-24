@@ -187,6 +187,8 @@ M.locales = {
     -- Sorveglianza stelle GitHub
     star_notify_title = "Nuova Stella su GitHub!",
     notify_preview_title = "Tema notifica: %s",
+    notify_preview_muted = "Audio disattivato: lo riproduco solo per l'anteprima",
+    notify_preview_muted_hint = "Il resto del plugin resta muto. Usa :PHSound per riattivarlo.",
     notify_preview_body_success = "Operazione riuscita — usato per scansioni e salvataggi",
     notify_preview_body_achievement = "Traguardo raggiunto — usato per le stelle GitHub",
     notify_preview_body_checkpoint = "Punto salvato — usato per le note dei progetti",
@@ -413,6 +415,8 @@ M.locales = {
     -- GitHub star watcher
     star_notify_title = "New GitHub Star!",
     notify_preview_title = "Notification theme: %s",
+    notify_preview_muted = "Audio is muted: playing for this preview only",
+    notify_preview_muted_hint = "The rest of the plugin stays silent. Use :PHSound to unmute.",
     notify_preview_body_success = "Operation succeeded — used for scans and saves",
     notify_preview_body_achievement = "Milestone reached — used for GitHub stars",
     notify_preview_body_checkpoint = "Checkpoint saved — used for project notes",

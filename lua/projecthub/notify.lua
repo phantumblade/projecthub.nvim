@@ -107,15 +107,28 @@ function M.preview(with_sound)
     connect = "connect", snap = "snap", toggle = "toggle", open = "open",
     delete = "delete", warn = "error", error = "error",
   }
+  -- Chiedere l'anteprima *con* i suoni è una richiesta esplicita di ascolto:
+  -- va onorata anche ad audio disattivato, altrimenti il comando risponde
+  -- con un silenzio indistinguibile da un guasto. Si avvisa però che il
+  -- resto del plugin resta muto, per non lasciare il dubbio.
+  local muted = with_sound and not sound.is_enabled()
+  if muted then
+    M.notify(i18n.t("notify_preview_muted"), i18n.t("notify_preview_muted_hint"), "warn", nil)
+  end
+
+  local offset = muted and 1 or 0
   for i, name in ipairs(M.preview_order) do
     vim.defer_fn(function()
+      if with_sound then
+        sound.play(sounds[name], true) -- force: scavalca il mute, solo qui
+      end
       M.notify(
         string.format(i18n.t("notify_preview_title"), name),
         i18n.t("notify_preview_body_" .. name) or "",
         name,
-        with_sound and sounds[name] or nil
+        nil
       )
-    end, (i - 1) * (with_sound and 900 or 260))
+    end, (i - 1 + offset) * (with_sound and 900 or 260))
   end
 end
 
