@@ -65,13 +65,13 @@ M.defaults = {
     fork = "\u{ea63} ", -- nf-cod-repo_forked
     ai = "\u{f51b} ", -- nf-oct-sparkle_fill: assistenti (Claude, Copilot, ...)
     bot = "\u{f06a9} ", -- nf-md-robot: pipeline e bot (CI, dependabot, ...)
-    -- Campanella delle notifiche, accanto al titolo della cronologia. La
-    -- coppia e' scelta fra le famiglie Material perche' i due glifi hanno
-    -- esattamente lo stesso ingombro (ink 0..750 su una cella da 600): cosi'
-    -- l'icona non si sposta dentro il riquadro quando cambia stato. Le
-    -- corrispondenti Font Awesome differivano di mezza cella fra loro.
+    -- Campanella delle notifiche, accanto al titolo della cronologia. La barra
+    -- obliqua e' il segno piu' immediato per "muto", percio' la coppia resta
+    -- campanella / campanella sbarrata. Entrambe della famiglia Material: le
+    -- corrispondenti Font Awesome sono larghe quasi due celle e sbordavano
+    -- fino ad addossarsi al badge del tasto.
     bell_on = "\u{f009a}",  -- nf-md-bell
-    bell_off = "\u{f00a0}", -- nf-md-bell_sleep
+    bell_off = "\u{f009b}", -- nf-md-bell_off
   },
 
   -- Nomi aggiuntivi da trattare come non umani, oltre a quelli riconosciuti di

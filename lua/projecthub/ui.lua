@@ -291,11 +291,15 @@ local function set_hl()
     --
     -- Senza sfondo, di proposito: nessuna campanella del font ha l'inchiostro
     -- centrato nella propria cella (md-bell occupa 0..750 su una cella da 600,
-    -- quindi pende di 0,125 celle a destra) e la griglia del terminale si
-    -- sposta solo di celle intere. Un riquadro non farebbe che dare all'occhio
-    -- il righello per misurare quello scarto; il badge del tasto qui accanto
-    -- basta gia' a dire che c'e' qualcosa da premere.
-    ProjectsWatchOn = { fg = "#e0af68", bold = true },
+    -- quindi pende a destra) e la griglia del terminale si sposta solo di celle
+    -- intere. Un riquadro non farebbe che dare all'occhio il righello per
+    -- misurare quello scarto; il badge del tasto qui accanto basta gia' a dire
+    -- che c'e' qualcosa da premere.
+    --
+    -- Il colore qui e' solo il ripiego: poco piu' sotto la campanella accesa
+    -- viene riagganciata all'accento della selezione, per non avere due
+    -- arancioni diversi nello stesso pannello.
+    ProjectsWatchOn = { fg = "#ff9e64", bold = true },
     ProjectsWatchOff = { fg = "#565f89" },
     ProjectsCommitBranch = { fg = "#73daca" },
     ProjectsCommitAuthor = { fg = "#2ac3de" },
@@ -351,6 +355,14 @@ local function set_hl()
 
   local accent = vim.api.nvim_get_hl(0, { name = "SnacksDashboardKey", link = false })
   if accent.fg or accent.sp then
+    -- La campanella accesa prende l'accento del progetto selezionato: e' lo
+    -- stesso "acceso" e non avrebbe senso che fossero due arancioni diversi.
+    -- Derivarlo invece di scriverlo tiene le due cose insieme anche se cambi
+    -- colorscheme.
+    vim.api.nvim_set_hl(0, "ProjectsWatchOn", {
+      fg = accent.fg or accent.sp,
+      bold = true,
+    })
     vim.api.nvim_set_hl(0, "ProjectsScrollbarThumb", {
       fg = accent.fg or accent.sp,
       bold = true,
@@ -1395,7 +1407,10 @@ local function render_inspector(st)
   -- avvisa mai, e li' vale la pena poterlo cambiare senza cercare altrove.
   local watch_on = P.is_watched(p.path, P.author_count(p))
   local function add_history_title(text, hl)
-    local bell = " " .. (watch_on and M.BELL_ON_ICON or M.BELL_OFF_ICON) .. " "
+    -- Due spazi a destra, non uno: l'inchiostro della campanella sborda dalla
+    -- propria cella e si mangiava l'unico spazio, incollandola al badge. Senza
+    -- riquadro la spaziatura asimmetrica non si vede, si vede solo l'aria.
+    local bell = " " .. (watch_on and M.BELL_ON_ICON or M.BELL_OFF_ICON) .. "  "
     local key = " b "
     local gap = "   "
     lines[#lines + 1] = text .. gap .. bell .. key
