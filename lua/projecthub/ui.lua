@@ -118,6 +118,70 @@ local LANG_TOKENS = {
   node = { name = "Node", hl = "ProjectsPillJS" },
 }
 
+-- Distintivo del tipo di progetto: al posto della parola, il marchio.
+--
+-- I glifi vengono dalla famiglia devicons, scelti confrontando le metriche del
+-- font: sono quelli con l'inchiostro piu' vicino al centro della cella, quindi
+-- i meno storti dentro un badge. La chiave e' minuscola perche' la stessa
+-- tabella serve sia ai tipi di progetto (Android, Node) sia ai linguaggi usati
+-- come ripiego quando nessun file indicatore dice di che progetto si tratta.
+local BADGES = {
+  android = { "\u{e70e}", "ProjectsPillAndroid" },
+  ios = { "\u{e711}", "ProjectsPillApple" },
+  swift = { "\u{e755}", "ProjectsPillSwift" },
+  gradle = { "\u{e7f2}", "ProjectsPillGradle" },
+  flutter = { "\u{e7dd}", "ProjectsPillFlutter" },
+  dart = { "\u{e798}", "ProjectsPillDart" },
+  rust = { "\u{e7a8}", "ProjectsPillRust" },
+  go = { "\u{e724}", "ProjectsPillGo" },
+  python = { "\u{e73c}", "ProjectsPillPython" },
+  node = { "\u{e718}", "ProjectsPillNode" },
+  javascript = { "\u{e74e}", "ProjectsPillJS" },
+  typescript = { "\u{e8ca}", "ProjectsPillTS" },
+  java = { "\u{e738}", "ProjectsPillJava" },
+  kotlin = { "\u{e81b}", "ProjectsPillKotlin" },
+  php = { "\u{e73d}", "ProjectsPillPHP" },
+  ruby = { "\u{e739}", "ProjectsPillRuby" },
+  elixir = { "\u{e7cd}", "ProjectsPillElixir" },
+  zig = { "\u{e6a9}", "ProjectsPillZig" },
+  lua = { "\u{e826}", "ProjectsPillLua" },
+  web = { "\u{e736}", "ProjectsPillHTML" },
+  html = { "\u{e736}", "ProjectsPillHTML" },
+  css = { "\u{e749}", "ProjectsPillCSS" },
+  vue = { "\u{e8dc}", "ProjectsPillVue" },
+  svelte = { "\u{e8b7}", "ProjectsPillSvelte" },
+  astro = { "\u{e735}", "ProjectsPillAstro" },
+  c = { "\u{e61e}", "ProjectsPillC" },
+  ["c++"] = { "\u{f0672}", "ProjectsPillCPP" },
+  ["c#"] = { "\u{e7b2}", "ProjectsPillCSharp" },
+  docker = { "\u{e7b0}", "ProjectsPillDocker" },
+  nix = { "\u{e843}", "ProjectsPillNix" },
+  terraform = { "\u{e8bd}", "ProjectsPillTerraform" },
+  sql = { "\u{e706}", "ProjectsPillSQL" },
+  shell = { "\u{e691}", "ProjectsPillShell" },
+  markdown = { "\u{e73e}", "ProjectsPillMarkdown" },
+}
+
+--- Distintivo da mostrare per un progetto: prima il tipo dedotto dai file di
+--- build, che e' il dato piu' preciso; in mancanza, il linguaggio dominante,
+--- che per un progetto di soli appunti o senza file indicatori e' comunque
+--- meglio di un badge vuoto.
+--- @return string|nil icona, string gruppo di evidenziazione
+local function type_badge(p)
+  local key = p.type and p.type:lower() or nil
+  local b = key and BADGES[key]
+  if b then return b[1], b[2] end
+  -- Il tipo c'e' ma non ha un marchio: meglio la parola che niente.
+  if p.type then return nil, "ProjectsType" end
+
+  local top = p.languages and p.languages[1]
+  if top and top.name then
+    local lb = BADGES[top.name:lower()]
+    if lb then return lb[1], lb[2] end
+  end
+  return nil, "ProjectsType"
+end
+
 local render_list, render_preview, render_scrollbar, render_preview_scrollbar
 local scroll_preview, ensure_visible, sync_sel_with_scroll, refresh
 local move, filter, reapply, card_at_mouse
@@ -250,6 +314,19 @@ local function set_hl()
     ProjectsPillZig = { fg = "#EC915C", bg = "#382B21", bold = true, undercurl = false, sp = nil },
     ProjectsPillMarkdown = { fg = "#61AFEF", bg = "#1F2B38", bold = true, undercurl = false, sp = nil },
     ProjectsPillShell = { fg = "#2ECC71", bg = "#1B3326", bold = true, undercurl = false, sp = nil },
+
+    -- Piattaforme e strumenti: stessa costruzione dei linguaggi (colore acceso
+    -- del marchio su un fondo spento dello stesso tono), per i tipi di progetto
+    -- che non sono un linguaggio ma un ecosistema.
+    ProjectsPillAndroid = { fg = "#3DDC84", bg = "#16301F", bold = true, undercurl = false, sp = nil },
+    ProjectsPillApple = { fg = "#D6D9DC", bg = "#2A2D30", bold = true, undercurl = false, sp = nil },
+    ProjectsPillNode = { fg = "#83CD29", bg = "#1E2E12", bold = true, undercurl = false, sp = nil },
+    ProjectsPillGradle = { fg = "#02B5C3", bg = "#122C2F", bold = true, undercurl = false, sp = nil },
+    ProjectsPillFlutter = { fg = "#47C5FB", bg = "#152C38", bold = true, undercurl = false, sp = nil },
+    ProjectsPillDocker = { fg = "#2496ED", bg = "#12253A", bold = true, undercurl = false, sp = nil },
+    ProjectsPillNix = { fg = "#7EBAE4", bg = "#1A2A36", bold = true, undercurl = false, sp = nil },
+    ProjectsPillTerraform = { fg = "#A067F5", bg = "#251A38", bold = true, undercurl = false, sp = nil },
+    ProjectsPillElixir = { fg = "#A06CC4", bg = "#281F33", bold = true, undercurl = false, sp = nil },
   }
 
   -- Soft, subtle link & inline code background tint (SENZA BLOCCI INVASIVI)
@@ -787,8 +864,18 @@ local function card(p, w, sel, st)
   elseif p.is_external then
     ptype = " 󱊞 " .. (p.volume_name or i18n.t("badge_external_online")) .. " "
     ptype_hl = "ProjectsType"
-  elseif p.type then
-    ptype = " " .. p.type .. " "
+  else
+    -- Il marchio dice la stessa cosa della parola in un terzo dello spazio, e
+    -- il colore la dice ancora prima che l'occhio arrivi a leggerlo. Se il tipo
+    -- non ha un marchio si ripiega sulla parola, come prima.
+    local icon, hl = type_badge(p)
+    if icon then
+      ptype = " " .. icon .. " "
+      ptype_hl = hl
+    elseif p.type then
+      ptype = " " .. p.type .. " "
+      ptype_hl = hl
+    end
   end
 
   local name_icon = p.is_disconnected and "󱊞 " or ""

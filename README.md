@@ -307,6 +307,16 @@ require("projecthub").setup({
 
 `tests/authors_spec.lua` pins the behaviour, false positives included.
 
+---
+
+## Project type badges
+
+The type badge on a card is the ecosystem's own mark rather than its name - a green robot for Android, the gopher for Go, the hexagon for Node - in the brand's colour on a dimmed ground of the same hue. It says the same thing as the word in a third of the space, and the colour lands before the eye has finished reading.
+
+Glyphs come from the devicons family, picked by measuring the font: for each language the variant whose ink sits closest to the centre of the cell, so the badge is not visibly off inside its pill.
+
+Detection reads the build file first, because that is the precise signal - `pubspec.yaml` means Flutter, `go.mod` means Go, `pom.xml` means Java - and the order runs from specific to general, so a `Dockerfile` only speaks when nothing else does. When a project has no build file at all - a notes repository, a folder of exercises - the badge falls back to the dominant language already computed for the language bar, which beats an empty badge. A type with no mark of its own still shows its name, exactly as before.
+
 After you pull, the divider disappears on the next refresh — the recount is local, so it does not wait for the following fetch. A repository without a remote, without an upstream branch, or whose fetch fails is simply left alone: nothing is invented, and a fetch that hangs on a credential prompt is abandoned after `timeout` seconds.
 
 ---

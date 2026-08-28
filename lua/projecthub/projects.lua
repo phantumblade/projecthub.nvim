@@ -298,18 +298,36 @@ local LANG_MAP = {
 }
 
 -- marcatore -> etichetta del tipo di progetto
+-- L'ordine conta: si ferma al primo riscontro, quindi i file che descrivono un
+-- ecosistema preciso vengono prima di quelli che tanti progetti hanno comunque.
 local TYPES = {
   { "Package.swift", "iOS" },
   { "Podfile", "iOS" },
   { "build.gradle.kts", "Android" },
   { "build.gradle", "Gradle" },
+  { "pubspec.yaml", "Flutter" },
   { "Cargo.toml", "Rust" },
   { "go.mod", "Go" },
+  { "mix.exs", "Elixir" },
+  { "build.zig", "Zig" },
+  { "composer.json", "PHP" },
+  { "Gemfile", "Ruby" },
   { "pyproject.toml", "Python" },
   { "requirements.txt", "Python" },
+  { "setup.py", "Python" },
   { "package.json", "Node" },
+  -- Maven: era stato tolto perche' ambiguo, ma l'ambiguita' era su Android, e
+  -- Android ha gia' detto la sua due righe piu' su con build.gradle. Quello che
+  -- resta qui e' Java, e senza questa riga i progetti Maven non avevano tipo.
+  { "pom.xml", "Java" },
+  { "CMakeLists.txt", "C++" },
+  { "flake.nix", "Nix" },
+  { "main.tf", "Terraform" },
   { "index.html", "Web" },
   { "init.lua", "Lua" },
+  -- Ultimo: un Dockerfile sta accanto a quasi ogni altro tipo, quindi vale solo
+  -- quando non c'e' nient'altro da dire.
+  { "Dockerfile", "Docker" },
 }
 
 function M.is_ignored(name)
@@ -523,6 +541,9 @@ local function project_type(dir)
       if not name then break end
       if name:match("%.xcodeproj$") or name:match("%.xcworkspace$") then
         return "iOS"
+      end
+      if name:match("%.csproj$") or name:match("%.sln$") then
+        return "C#"
       end
     end
   end
