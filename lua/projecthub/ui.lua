@@ -4293,7 +4293,13 @@ function M.open()
   local grp = vim.api.nvim_create_augroup("CustomProjects_" .. st.input.buf, { clear = true })
 
   for _, b in ipairs(all_bufs) do
-    vim.api.nvim_create_autocmd({ "QuitPre", "BufWipeout", "BufDelete" }, {
+    -- Volutamente senza QuitPre. Chiudere le finestre da dentro QuitPre manda
+    -- in stallo la sequenza di uscita di Neovim: con la dashboard aperta un
+    -- `:qa` non terminava piu' il processo, e l'unico modo di uscire era
+    -- chiuderla prima. La chiusura di una finestra cancella comunque il buffer
+    -- - sono tutti scratch - quindi BufWipeout arriva lo stesso e `:q` continua
+    -- a funzionare.
+    vim.api.nvim_create_autocmd({ "BufWipeout", "BufDelete" }, {
       group = grp,
       buffer = b,
       callback = function()
@@ -4499,6 +4505,18 @@ function M.open()
       last_type_time = (vim.uv or vim.loop).now()
       sound.play("typing")
       filter(st)
+    end,
+  })
+
+  -- Rete di sicurezza sull'uscita. Gli autocmd qui sopra sono legati ai buffer
+  -- della dashboard, e con `:qa` Neovim non li percorre uno per uno: il timer
+  -- della marquee restava aperto, e un handle libuv vivo impedisce al processo
+  -- di terminare. Chi chiude Neovim non deve aspettare che un plugin si accorga
+  -- che e' finita, in qualunque modo ci si arrivi.
+  vim.api.nvim_create_autocmd({ "VimLeavePre", "VimLeave" }, {
+    group = grp,
+    callback = function()
+      close()
     end,
   })
 
