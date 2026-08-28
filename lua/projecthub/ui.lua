@@ -864,8 +864,10 @@ local function card(p, w, sel, st)
   local dir = fit(clean_dir, iw - dw(age) - 2)
   local gl, gr
   if p.is_disconnected then
+    -- Solo la pillola: il nome dell'unita' e' gia' nel badge in alto a destra
+    -- della card, e ripeterlo qui sotto non aggiunge niente.
     gl = { { " " .. i18n.t("offline_tag") .. " ", "ProjectsOfflineTag" } }
-    gr = { { p.volume_name or "SSD", "ProjectsOfflineAccent" } }
+    gr = {}
   else
     gl, gr = git_chunks(p.git)
   end
@@ -4419,7 +4421,12 @@ function M.open()
       end
     end, true)
     P.load_languages(st.all, function()
-      if not closed then render_list(st) end
+      if not closed then
+        render_list(st)
+        if (st.view_mode or "inspector") == "inspector" then
+          render_preview(st)
+        end
+      end
     end, true)
   end
 

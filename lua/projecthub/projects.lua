@@ -64,19 +64,30 @@ function M.cache_project_metadata(p)
   if not p or not p.path or p.path == "" or p.is_missing then return end
   local c_data = load_projects_cache()
   local norm = M.normalize_path(p.path)
+  local prev = c_data[norm] or {}
+
+  -- Questa viene chiamata mentre la lista si costruisce, quando i linguaggi
+  -- sono ancora in volo: scriverli comunque significava sovrascrivere con nil
+  -- quelli buoni del giro precedente, e un progetto su unita' scollegata non
+  -- riusciva mai a mostrarli. Cio' che non si sa adesso si tiene da prima.
+  local function keep(now, before)
+    if now == nil then return before end
+    return now
+  end
+
   c_data[norm] = {
-    name = p.name,
-    type = p.type,
-    desc = p.desc,
-    dir = p.dir,
-    ago = p.ago,
-    mtime = p.mtime or 0,
+    name = keep(p.name, prev.name),
+    type = keep(p.type, prev.type),
+    desc = keep(p.desc, prev.desc),
+    dir = keep(p.dir, prev.dir),
+    ago = keep(p.ago, prev.ago),
+    mtime = p.mtime or prev.mtime or 0,
     is_external = p.is_external or false,
-    volume_name = p.volume_name,
-    mount_point = p.mount_point,
-    languages = p.languages,
-    mine = p.mine,
-    owner = p.owner,
+    volume_name = keep(p.volume_name, prev.volume_name),
+    mount_point = keep(p.mount_point, prev.mount_point),
+    languages = keep(p.languages, prev.languages),
+    mine = keep(p.mine, prev.mine),
+    owner = keep(p.owner, prev.owner),
   }
   save_projects_cache(c_data)
 end
@@ -407,6 +418,11 @@ local LANG_CACHE = {}
 function M.load_languages(items, on_update, force)
   local queue = {}
   for _, it in ipairs(items) do
+    -- `force` deve svuotare la voce, non solo essere passato: prima bastava che
+    -- la cache esistesse perche' il ricalcolo venisse saltato, quindi un
+    -- progetto scansionato mentre il suo disco era staccato - e quindi con
+    -- l'elenco vuoto - restava senza linguaggi anche dopo averlo ricollegato.
+    if force then LANG_CACHE[it.path] = nil end
     if LANG_CACHE[it.path] then
       it.languages = LANG_CACHE[it.path]
       -- M.list() ricrea sempre `it` da zero: quando i linguaggi arrivano
@@ -416,7 +432,7 @@ function M.load_languages(items, on_update, force)
       for _, l in ipairs(it.languages) do search_terms[#search_terms + 1] = l.name:lower() end
       it.search = it.search .. " " .. table.concat(search_terms, " ")
     end
-    if (force and not LANG_CACHE[it.path]) or not it.languages then
+    if not it.languages then
       queue[#queue + 1] = it
     end
   end
@@ -498,6 +514,9 @@ function M.load_languages(items, on_update, force)
     for _, l in ipairs(list) do search_terms[#search_terms + 1] = l.name:lower() end
     item.languages = list
     LANG_CACHE[item.path] = list
+    -- Solo se si e' trovato qualcosa: un elenco vuoto e' quasi sempre il segno
+    -- che la cartella non era raggiungibile, e non vale la pena ricordarlo.
+    if #list > 0 then M.cache_project_metadata(item) end
     item.search = item.search .. " " .. table.concat(search_terms, " ")
 
     if on_update then on_update(item) end
