@@ -68,6 +68,10 @@
 |:---:|:---:|
 | ![Empty State](screenshots/empty-search.png) | ![Inspector](screenshots/inspector.png) |
 
+| Commits Waiting on Upstream | External Drive Unplugged |
+|:---:|:---:|
+| ![Incoming Commits](screenshots/incoming-commits.png) | ![Offline Drive](screenshots/offline-drive.png) |
+
 ---
 
 ## Requirements
