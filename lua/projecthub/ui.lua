@@ -1712,24 +1712,26 @@ local function render_inspector(st)
       local word = big_word(i18n.t("offline_tag"))
       local word_w = word and dw(word[1]) or 0
 
-      add("")
-      add("")
-      if word and word_w <= pw - 4 then
+      -- Il font a blocchi ci sta solo se il pannello e' abbastanza largo.
+      -- Quando non ci sta la parola non si stira con gli spazi - diventerebbe
+      -- una riga di lettere sparse, che si legge peggio di una scritta normale
+      -- e non e' piu' un titolo: passa dentro il riquadro, come pillola, dove
+      -- ha un fondo che la tiene insieme.
+      local big = word and word_w <= pw - 4
+
+      if big then
+        add("")
+        add("")
         local pad = string.rep(" ", math.max(0, math.floor((pw - word_w) / 2)))
         for _, l in ipairs(word) do
           lines[#lines + 1] = pad .. l
           hls[#hls + 1] = { #lines - 1, #pad, #(pad .. l), "ProjectsOfflineAccent" }
         end
+        add("")
+        add("")
       else
-        -- Pannello troppo stretto per il font a blocchi: la parola resta, in
-        -- maiuscolo spaziato, che a colpo d'occhio regge lo stesso.
-        local plain = table.concat(vim.split(i18n.t("offline_tag"), ""), " ")
-        local pad = string.rep(" ", math.max(0, math.floor((pw - dw(plain)) / 2)))
-        lines[#lines + 1] = pad .. plain
-        hls[#hls + 1] = { #lines - 1, #pad, #(pad .. plain), "ProjectsOfflineAccent" }
+        add("")
       end
-      add("")
-      add("")
 
       local inner = math.max(34, math.min(pw - 8, 64))
       local box_w = inner + 4
@@ -1763,7 +1765,12 @@ local function render_inspector(st)
       end
 
       frame("╭", "╮")
-      row({ { "󱊞  " .. vol, "ProjectsOfflineAccent" } })
+      if big then
+        row({ { "󱊞  " .. vol, "ProjectsOfflineAccent" } })
+      else
+        row({ { " " .. i18n.t("offline_tag") .. " ", "ProjectsOfflineTag" },
+              { "   󱊞  " .. vol, "ProjectsOfflineAccent" } })
+      end
       row({ { "", "ProjectsOfflineText" } })
       row({ { i18n.t("external_box_where"), "ProjectsOfflineText" } })
       row({ { fit(p.path or "", inner), "ProjectsOfflinePath" } })
