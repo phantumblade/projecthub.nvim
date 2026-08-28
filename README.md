@@ -289,7 +289,9 @@ Three more rules keep the cost invisible:
 
 A project living on an external drive is not missing when the drive is unplugged - it is simply out of reach, and it comes back the moment the drive does. Those two situations look nothing alike and should not read alike: a project whose folder was deleted or moved gets the red card and offers to reconnect or forget it, while one on an unplugged drive gets the amber panel, the drive glyph, and the only instruction that applies - plug the drive back in.
 
-The offline panel is built for one job. A single amber accent carries the state - a filled `SCOLLEGATO` pill so it registers before anything is read - over a dimmed frame, because the box is there to hold the message, not to compete with it, and a muted grey for the path, which matters only once you go looking for it. The drive glyph appears once, beside the volume name, instead of on the title, the folder line and the status row as well.
+The offline panel is built for one job, so it says one thing loudly: the state is spelled out in block letters across the middle of the pane, in amber, the way the opening screen spells the plugin's name. It is the headline of that screen, not a note in the corner, so there is no badge repeating it in the top right and no section heading announcing a panel that contains a single message. Below it, centred, a dimmed frame holds the two things left to know - where the project lives, and that plugging the drive back in is the whole remedy. The drive glyph appears once, beside the volume name, instead of on the title, the folder line and the status row as well.
+
+Panes too narrow for the block letters fall back to the word spaced out in capitals, which still reads as a headline.
 
 The footer is modular: on an unplugged drive there are no files, so Note, Tree and Commit would be keys that do nothing, and a key that does nothing is worse than an absent one. GitHub stays - its URL lives in the metadata cache, so it works with the drive out.
 

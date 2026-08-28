@@ -138,6 +138,38 @@ local function type_label(p)
   return nil
 end
 
+-- Font a blocchi per una parola sola, resa in grande al centro del pannello.
+-- Stesso tratto della scritta d'apertura, cosi' gli stati che meritano di
+-- essere gridati parlano con la stessa voce. Ci sono soltanto le lettere che
+-- servono agli stati esistenti: aggiungerne altre e' un attimo, riempire la
+-- tabella con l'alfabeto intero per usarne dieci no.
+local BIG_FONT = {
+  A = { " █████╗ ", "██╔══██╗", "███████║", "██╔══██║", "██║  ██║", "╚═╝  ╚═╝" },
+  C = { " ██████╗", "██╔════╝", "██║     ", "██║     ", "╚██████╗", " ╚═════╝" },
+  E = { "███████╗", "██╔════╝", "█████╗  ", "██╔══╝  ", "███████╗", "╚══════╝" },
+  F = { "███████╗", "██╔════╝", "█████╗  ", "██╔══╝  ", "██║     ", "╚═╝     " },
+  G = { " ██████╗ ", "██╔════╝ ", "██║  ███╗", "██║   ██║", "╚██████╔╝", " ╚═════╝ " },
+  I = { "██╗", "██║", "██║", "██║", "██║", "╚═╝" },
+  L = { "██╗     ", "██║     ", "██║     ", "██║     ", "███████╗", "╚══════╝" },
+  N = { "███╗   ██╗", "████╗  ██║", "██╔██╗ ██║", "██║╚██╗██║", "██║ ╚████║", "╚═╝  ╚═══╝" },
+  O = { " ██████╗ ", "██╔═══██╗", "██║   ██║", "██║   ██║", "╚██████╔╝", " ╚═════╝ " },
+  S = { "███████╗", "██╔════╝", "███████╗", "╚════██║", "███████║", "╚══════╝" },
+  T = { "████████╗", "╚══██╔══╝", "   ██║   ", "   ██║   ", "   ██║   ", "   ╚═╝   " },
+  [" "] = { "   ", "   ", "   ", "   ", "   ", "   " },
+}
+
+--- Compone una parola nel font a blocchi.
+--- @return table|nil sei righe, oppure nil se una lettera manca dalla tabella
+local function big_word(word)
+  local rows = { "", "", "", "", "", "" }
+  for ch in tostring(word):upper():gmatch(".") do
+    local g = BIG_FONT[ch]
+    if not g then return nil end
+    for i = 1, 6 do rows[i] = rows[i] .. g[i] end
+  end
+  return rows
+end
+
 local render_list, render_preview, render_scrollbar, render_preview_scrollbar
 local scroll_preview, ensure_visible, sync_sel_with_scroll, refresh
 local move, filter, reapply, card_at_mouse
@@ -1464,7 +1496,6 @@ local function render_inspector(st)
 
   local vis_text = ""
   local vis_hl = "ProjectsHeaderLocal"
-  local offline_tag = ""
   local star_text = ""
   local fork_text = ""
 
@@ -1474,7 +1505,6 @@ local function render_inspector(st)
   elseif p.is_disconnected then
     vis_text = "󱊞 " .. (p.volume_name and ("SSD: " .. p.volume_name) or i18n.t("badge_external_offline"))
     vis_hl = "ProjectsOfflineAccent"
-    offline_tag = " " .. i18n.t("offline_tag") .. " "
   elseif gh_meta then
     if gh_meta.is_private then
       vis_text = ICON_LOCK .. " " .. i18n.t("header_private")
@@ -1502,10 +1532,6 @@ local function render_inspector(st)
 
   local right_parts = {}
   right_parts[#right_parts + 1] = { txt = vis_text, hl = vis_hl }
-  if offline_tag ~= "" then
-    right_parts[#right_parts + 1] = { txt = "  ", hl = "NormalFloat" }
-    right_parts[#right_parts + 1] = { txt = offline_tag, hl = "ProjectsOfflineTag" }
-  end
   if show_owner_pill then
     local o_hl = get_author_pill_hl(gh_meta.owner)
     right_parts[#right_parts + 1] = { txt = " " .. owner_pill_str, hl = o_hl }
@@ -1646,8 +1672,10 @@ local function render_inspector(st)
       add("   " .. i18n.t("commits_none"), "ProjectsDesc")
     end
   else
-    add("")
-    add("  " .. ICON_OVERVIEW .. " " .. i18n.t("overview"), "ProjectsTitleSpecial")
+    if not p.is_disconnected then
+      add("")
+      add("  " .. ICON_OVERVIEW .. " " .. i18n.t("overview"), "ProjectsTitleSpecial")
+    end
 
     if p.is_missing then
       local box_title = i18n.t("missing_box_title")
@@ -1674,22 +1702,45 @@ local function render_inspector(st)
       end
       add("   └" .. string.rep("─", inner_w + 4) .. "┘", "ProjectsHeaderMissing")
     elseif p.is_disconnected then
-      -- Riquadro dello stato scollegato. Ricostruito riga per riga invece che
-      -- con add(): add() colora l'intera riga, quindi la cornice prendeva il
-      -- colore del testo che conteneva e cambiava tinta a ogni riga. Qui la
-      -- cornice ha un colore suo e il contenuto il proprio, e la larghezza e'
-      -- una sola misura per tutti i bordi, cosi' il lato destro chiude dritto.
+      -- Lo stato si annuncia una volta sola, in grande e al centro: e' il
+      -- fatto principale della schermata, non una nota a margine. Sotto, il
+      -- riquadro dice le due cose che restano da sapere - dov'e' il progetto e
+      -- che basta ricollegare l'unita'.
       local vol = p.volume_name or "SSD"
-      local inner = math.max(34, math.min(pw - 10, 66))
-      local tag = " " .. i18n.t("offline_tag") .. " "
+      local word = big_word(i18n.t("offline_tag"))
+      local word_w = word and dw(word[1]) or 0
+
+      add("")
+      add("")
+      if word and word_w <= pw - 4 then
+        local pad = string.rep(" ", math.max(0, math.floor((pw - word_w) / 2)))
+        for _, l in ipairs(word) do
+          lines[#lines + 1] = pad .. l
+          hls[#hls + 1] = { #lines - 1, #pad, #(pad .. l), "ProjectsOfflineAccent" }
+        end
+      else
+        -- Pannello troppo stretto per il font a blocchi: la parola resta, in
+        -- maiuscolo spaziato, che a colpo d'occhio regge lo stesso.
+        local plain = table.concat(vim.split(i18n.t("offline_tag"), ""), " ")
+        local pad = string.rep(" ", math.max(0, math.floor((pw - dw(plain)) / 2)))
+        lines[#lines + 1] = pad .. plain
+        hls[#hls + 1] = { #lines - 1, #pad, #(pad .. plain), "ProjectsOfflineAccent" }
+      end
+      add("")
+      add("")
+
+      local inner = math.max(34, math.min(pw - 8, 64))
+      local box_w = inner + 4
+      local ind = string.rep(" ", math.max(0, math.floor((pw - box_w) / 2)))
 
       local function frame(left, right)
-        lines[#lines + 1] = "   " .. left .. string.rep("─", inner + 2) .. right
-        hls[#hls + 1] = { #lines - 1, 3, #lines[#lines], "ProjectsOfflineBorder" }
+        local line = ind .. left .. string.rep("─", inner + 2) .. right
+        lines[#lines + 1] = line
+        hls[#hls + 1] = { #lines - 1, #ind, #line, "ProjectsOfflineBorder" }
       end
 
-      --- Una riga del riquadro: i bordi restano del colore della cornice,
-      --- il contenuto porta il proprio.
+      --- Una riga del riquadro: i bordi tengono il colore della cornice, il
+      --- contenuto il proprio. add() colorerebbe tutto insieme.
       local function row(segments)
         local body, marks, col = "", {}, 0
         for _, seg in ipairs(segments) do
@@ -1698,11 +1749,11 @@ local function render_inspector(st)
           col = col + #seg[1]
         end
         local pad = math.max(0, inner - dw(body))
-        local line = "   │ " .. body .. string.rep(" ", pad) .. " │"
+        local line = ind .. "│ " .. body .. string.rep(" ", pad) .. " │"
         lines[#lines + 1] = line
         local r = #lines - 1
-        local base = #"   │ "
-        hls[#hls + 1] = { r, 3, base, "ProjectsOfflineBorder" }
+        local base = #ind + #"│ "
+        hls[#hls + 1] = { r, #ind, base, "ProjectsOfflineBorder" }
         for _, m in ipairs(marks) do
           hls[#hls + 1] = { r, base + m[1], base + m[2], m[3] }
         end
@@ -1710,19 +1761,13 @@ local function render_inspector(st)
       end
 
       frame("╭", "╮")
-      -- Prima riga: di quale unita' si tratta, e che non c'e'. Il resto sono
-      -- dettagli, questo e' il fatto.
-      local head = "󱊞  " .. vol
-      row({ { head, "ProjectsOfflineAccent" },
-            { string.rep(" ", math.max(1, inner - dw(head) - dw(tag))), "ProjectsOfflineText" },
-            { tag, "ProjectsOfflineTag" } })
+      row({ { "󱊞  " .. vol, "ProjectsOfflineAccent" } })
       row({ { "", "ProjectsOfflineText" } })
       row({ { i18n.t("external_box_where"), "ProjectsOfflineText" } })
       row({ { fit(p.path or "", inner), "ProjectsOfflinePath" } })
       row({ { "", "ProjectsOfflineText" } })
-      for _, ln in ipairs({ i18n.t("external_box_how", vol), i18n.t("external_box_auto") }) do
-        row({ { fit(ln, inner), "ProjectsOfflineText" } })
-      end
+      row({ { fit(i18n.t("external_box_how", vol), inner), "ProjectsOfflineText" } })
+      row({ { fit(i18n.t("external_box_auto"), inner), "ProjectsOfflinePath" } })
       frame("╰", "╯")
     else
       if p.loc_lines then
