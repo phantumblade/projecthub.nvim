@@ -20,12 +20,36 @@ local RECENTS_FILE = DATA_DIR .. "/recents.json"
 local CUSTOM_PROJECTS_FILE = DATA_DIR .. "/custom_projects.json"
 local PROJECTS_CACHE_FILE = DATA_DIR .. "/projects_cache.json"
 
+--- Forma canonica di un percorso, da usare ogni volta che serve come identita'.
+--- Le barre ripetute non cambiano il file a cui si punta - "//Volumes/x" e
+--- "/Volumes/x" sono la stessa cartella per il filesystem - ma cambiano la
+--- chiave: bastava una barra di troppo perche' lo stesso progetto comparisse
+--- due volte, e perche' il riconoscimento dell'unita' esterna, che confronta il
+--- prefisso "/Volumes/", non lo riconoscesse piu' e lo desse per eliminato.
+function M.normalize_path(path)
+  if not path or path == "" then return path end
+  local expanded = vim.fn.fnamemodify(vim.fn.expand(path), ":p")
+  return (expanded:gsub("//+", "/"):gsub("(.)/$", "%1"))
+end
+
 local function load_projects_cache()
   if vim.fn.filereadable(PROJECTS_CACHE_FILE) == 0 then return {} end
   local ok, lines = pcall(vim.fn.readfile, PROJECTS_CACHE_FILE)
   if not ok or not lines or #lines == 0 then return {} end
   local ok_json, data = pcall(vim.json.decode, table.concat(lines, "\n"))
-  return (ok_json and type(data) == "table") and data or {}
+  if not (ok_json and type(data) == "table") then return {} end
+
+  -- Le chiavi scritte da versioni precedenti possono essere in forma non
+  -- canonica: si riconducono qui, cosi' i doppioni collassano invece di
+  -- restare a generare due card per lo stesso progetto.
+  local clean = {}
+  for k, v in pairs(data) do
+    local nk = M.normalize_path(k)
+    if clean[nk] == nil or (type(v) == "table" and (v.mtime or 0) >= ((clean[nk] or {}).mtime or 0)) then
+      clean[nk] = v
+    end
+  end
+  return clean
 end
 
 local function save_projects_cache(cache_data)
@@ -39,7 +63,7 @@ end
 function M.cache_project_metadata(p)
   if not p or not p.path or p.path == "" or p.is_missing then return end
   local c_data = load_projects_cache()
-  local norm = vim.fn.fnamemodify(p.path, ":p"):gsub("/$", "")
+  local norm = M.normalize_path(p.path)
   c_data[norm] = {
     name = p.name,
     type = p.type,
@@ -61,7 +85,7 @@ function M.get_volume_info(path)
   if not path or path == "" then
     return { is_external = false, volume_name = nil, mount_point = nil }
   end
-  local expanded = vim.fn.fnamemodify(vim.fn.expand(path), ":p"):gsub("/$", "")
+  local expanded = M.normalize_path(path)
 
   -- macOS: /Volumes/<VolumeName>/...
   local mac_vol = expanded:match("^/Volumes/([^/]+)")
@@ -120,7 +144,7 @@ end
 
 local function norm_path(p)
   if not p or p == "" then return "" end
-  return vim.fn.fnamemodify(vim.fn.expand(p), ":p"):gsub("/$", ""):lower()
+  return M.normalize_path(p):lower()
 end
 
 function M.is_project(target_path)
@@ -160,7 +184,7 @@ function M.add_custom_extra(path)
     return false, "already_registered", vim.fn.fnamemodify(path, ":t")
   end
 
-  local clean_p = vim.fn.fnamemodify(expanded, ":p"):gsub("/$", "")
+  local clean_p = M.normalize_path(expanded)
   local extras = M.get_custom_extras()
   extras[#extras + 1] = clean_p
   local ok = pcall(vim.fn.writefile, { vim.json.encode(extras) }, CUSTOM_PROJECTS_FILE)
@@ -175,7 +199,7 @@ end
 
 function M.remove_custom_extra(path)
   if not path or path == "" then return end
-  path = vim.fn.fnamemodify(vim.fn.expand(path), ":p"):gsub("/$", "")
+  path = M.normalize_path(path)
   local extras = M.get_custom_extras()
   local new_list = {}
   for _, p in ipairs(extras) do
@@ -196,7 +220,7 @@ function M.get_recents()
 end
 
 function M.add_recent(path)
-  path = vim.fn.fnamemodify(path, ":p"):gsub("/$", "")
+  path = M.normalize_path(path)
   local recents = M.get_recents()
   local new_list = { path }
   for _, p in ipairs(recents) do
@@ -208,7 +232,7 @@ function M.add_recent(path)
 end
 
 function M.remove_recent(path)
-  path = vim.fn.fnamemodify(path, ":p"):gsub("/$", "")
+  path = M.normalize_path(path)
   local recents = M.get_recents()
   local new_list = {}
   for _, p in ipairs(recents) do
@@ -349,7 +373,7 @@ end
 ---@return string[] percorsi assoluti dei progetti trovati
 function M.detect_projects_in(dir)
   local found = {}
-  local root = vim.fn.fnamemodify(vim.fn.expand(dir or ""), ":p"):gsub("/$", "")
+  local root = M.normalize_path(dir or "")
   if root == "" or vim.fn.isdirectory(root) == 0 then return found end
 
   local ok, handle = pcall(vim.uv.fs_scandir, root)
@@ -621,7 +645,7 @@ end
 function M.paths()
   local seen, out = {}, {}
   local function add(path)
-    path = vim.fn.fnamemodify(vim.fn.expand(path), ":p"):gsub("/$", "")
+    path = M.normalize_path(path)
     if seen[path] or vim.fn.isdirectory(path) == 0 then return end
     seen[path] = true
     out[#out + 1] = path
@@ -657,7 +681,7 @@ function M.list(refresh)
   local disk_cache = load_projects_cache()
 
   for _, path in ipairs(M.paths()) do
-    local norm_path = vim.fn.fnamemodify(path, ":p"):gsub("/$", "")
+    local norm_path = M.normalize_path(path)
     seen[norm_path] = true
     local mine, owner = is_mine(path)
     local ptype = project_type(path)
@@ -688,12 +712,10 @@ function M.list(refresh)
 
   local missing_candidates = {}
   for _, p in ipairs(M.get_custom_extras()) do
-    local norm = vim.fn.fnamemodify(p, ":p"):gsub("/$", "")
-    missing_candidates[norm] = true
+    missing_candidates[M.normalize_path(p)] = true
   end
   for _, p in ipairs(M.extra) do
-    local norm = vim.fn.fnamemodify(p, ":p"):gsub("/$", "")
-    missing_candidates[norm] = true
+    missing_candidates[M.normalize_path(p)] = true
   end
   for norm, _ in pairs(recents_map) do
     missing_candidates[norm] = true
@@ -887,13 +909,13 @@ function M.get_notes()
 end
 
 function M.get_note(path)
-  path = vim.fn.fnamemodify(path, ":p"):gsub("/$", "")
+  path = M.normalize_path(path)
   local notes = M.get_notes()
   return notes[path] or ""
 end
 
 function M.save_note(path, text)
-  path = vim.fn.fnamemodify(path, ":p"):gsub("/$", "")
+  path = M.normalize_path(path)
   local notes = M.get_notes()
   notes[path] = text
   pcall(vim.fn.writefile, { vim.json.encode(notes) }, NOTES_FILE)
@@ -1247,7 +1269,7 @@ local function incoming_opts()
 end
 
 local function norm_path(path)
-  return (vim.fn.fnamemodify(path, ":p"):gsub("/$", ""))
+  return M.normalize_path(path)
 end
 
 local function load_seen()

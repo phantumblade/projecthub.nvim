@@ -285,6 +285,14 @@ Three more rules keep the cost invisible:
 
 ---
 
+## Disconnected drives are a state, not an error
+
+A project living on an external drive is not missing when the drive is unplugged - it is simply out of reach, and it comes back the moment the drive does. Those two situations look nothing alike and should not read alike: a project whose folder was deleted or moved gets the red card and offers to reconnect or forget it, while one on an unplugged drive gets the amber panel, the drive glyph, and the only instruction that applies - plug the drive back in.
+
+Which of the two you see hinges on the path being in canonical form. Repeated slashes point at exactly the same folder as far as the filesystem is concerned, but they are a different string, and a different string is a different key: one stray slash was enough for a project to appear twice, the second time as deleted, because `//Volumes/...` no longer matched the `/Volumes/` prefix the external-drive check looks for. Every path that serves as an identity - cache keys, recents, notes, custom entries - now goes through `normalize_path` first, and cache keys written by older versions are folded into canonical form as they are read, so duplicates collapse on their own. `tests/paths_spec.lua` covers it.
+
+---
+
 ## Machines in the history
 
 A commit written by a pipeline or an assistant does not read like one written by hand, and a history is easier to scan when you can tell them apart at a glance. Non-human authors get their own glyph and a single shared colour - fuchsia, the one hue the six author pills do not use - so the question "did a machine write this?" is answered by colour before you read the name:
