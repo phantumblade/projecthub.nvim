@@ -289,6 +289,12 @@ Three more rules keep the cost invisible:
 
 A project living on an external drive is not missing when the drive is unplugged - it is simply out of reach, and it comes back the moment the drive does. Those two situations look nothing alike and should not read alike: a project whose folder was deleted or moved gets the red card and offers to reconnect or forget it, while one on an unplugged drive gets the amber panel, the drive glyph, and the only instruction that applies - plug the drive back in.
 
+The offline panel is built for one job. A single amber accent carries the state - a filled `SCOLLEGATO` pill so it registers before anything is read - over a dimmed frame, because the box is there to hold the message, not to compete with it, and a muted grey for the path, which matters only once you go looking for it. The drive glyph appears once, beside the volume name, instead of on the title, the folder line and the status row as well.
+
+The footer is modular: on an unplugged drive there are no files, so Note, Tree and Commit would be keys that do nothing, and a key that does nothing is worse than an absent one. GitHub stays - its URL lives in the metadata cache, so it works with the drive out.
+
+Plugging the drive back in is noticed within half a second. The check is one `stat` per external project, so it runs on every tick rather than riding along with the git polling that spawns processes; it used to take up to five seconds to notice a drive that was already mounted.
+
 Which of the two you see hinges on the path being in canonical form. Repeated slashes point at exactly the same folder as far as the filesystem is concerned, but they are a different string, and a different string is a different key: one stray slash was enough for a project to appear twice, the second time as deleted, because `//Volumes/...` no longer matched the `/Volumes/` prefix the external-drive check looks for. Every path that serves as an identity - cache keys, recents, notes, custom entries - now goes through `normalize_path` first, and cache keys written by older versions are folded into canonical form as they are read, so duplicates collapse on their own. `tests/paths_spec.lua` covers it.
 
 ---

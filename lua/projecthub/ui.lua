@@ -306,6 +306,16 @@ local function set_hl()
     ProjectsIncomingLabel = { fg = "#565f89" },
     ProjectsIncomingLine = { fg = "#3b4763" },
 
+    -- Unita' esterna scollegata. Un solo accento ambra per tutto lo stato:
+    -- pillola piena per dirlo a colpo d'occhio, cornice spenta perche' il
+    -- riquadro deve contenere il messaggio e non gareggiarci, e un grigio per
+    -- il percorso, che si legge quando serve e non prima.
+    ProjectsOfflineTag = { fg = "#1a1b26", bg = "#ff9e64", bold = true },
+    ProjectsOfflineAccent = { fg = "#ff9e64", bold = true },
+    ProjectsOfflineBorder = { fg = "#4a3a2a" },
+    ProjectsOfflineText = { fg = "#c0caf5" },
+    ProjectsOfflinePath = { fg = "#7a8199" },
+
     -- Interruttore delle notifiche accanto al titolo della cronologia. L'oro
     -- dice "sveglia", il grigio spento dice "muta" ed e' lo stesso tono con cui
     -- il pannello segna tutto cio' che non e' attivo.
@@ -804,7 +814,7 @@ local function card(p, w, sel, st)
   local ptype_hl = "ProjectsType"
   if p.is_disconnected then
     ptype = " 󱊞 " .. (p.volume_name and ("SSD: " .. p.volume_name) or i18n.t("badge_external_offline")) .. " "
-    ptype_hl = "ProjectsPostItText"
+    ptype_hl = "ProjectsOfflineAccent"
   elseif p.is_external then
     ptype = " 󱊞 " .. (p.volume_name or i18n.t("badge_external_online")) .. " "
     ptype_hl = "ProjectsType"
@@ -813,17 +823,17 @@ local function card(p, w, sel, st)
     if label then ptype = " " .. label .. " " end
   end
 
-  local name_icon = p.is_disconnected and "󱊞 " or ""
-  local name = fit(name_icon .. p.name, iw - dw(ptype) - 2)
+  -- L'icona dell'unita' la porta il badge a destra, una volta sola: sul nome,
+  -- sulla cartella e sulla riga di stato era la stessa cosa detta quattro volte.
+  local name = fit(p.name, iw - dw(ptype) - 2)
   local desc = p.desc and fit(p.desc, iw) or i18n.t("no_description")
   local age = p.ago or ""
-  local dir_prefix = (p.is_external or p.is_disconnected) and "󱊞 " or ""
   local clean_dir = (p.dir or ""):gsub("^/+", "/"):gsub("^~//+", "~/")
-  local dir = fit(dir_prefix .. clean_dir, iw - dw(age) - 2)
+  local dir = fit(clean_dir, iw - dw(age) - 2)
   local gl, gr
   if p.is_disconnected then
-    gl = { { "󱊞 " .. i18n.t("badge_external_offline"), "ProjectsPostItText" } }
-    gr = { { i18n.t("badge_disconnected"), "ProjectsMeta" } }
+    gl = { { " " .. i18n.t("offline_tag") .. " ", "ProjectsOfflineTag" } }
+    gr = { { p.volume_name or "SSD", "ProjectsOfflineAccent" } }
   else
     gl, gr = git_chunks(p.git)
   end
@@ -1454,6 +1464,7 @@ local function render_inspector(st)
 
   local vis_text = ""
   local vis_hl = "ProjectsHeaderLocal"
+  local offline_tag = ""
   local star_text = ""
   local fork_text = ""
 
@@ -1462,7 +1473,8 @@ local function render_inspector(st)
     vis_hl = "ProjectsHeaderMissing"
   elseif p.is_disconnected then
     vis_text = "󱊞 " .. (p.volume_name and ("SSD: " .. p.volume_name) or i18n.t("badge_external_offline"))
-    vis_hl = "ProjectsPostItText"
+    vis_hl = "ProjectsOfflineAccent"
+    offline_tag = " " .. i18n.t("offline_tag") .. " "
   elseif gh_meta then
     if gh_meta.is_private then
       vis_text = ICON_LOCK .. " " .. i18n.t("header_private")
@@ -1490,6 +1502,10 @@ local function render_inspector(st)
 
   local right_parts = {}
   right_parts[#right_parts + 1] = { txt = vis_text, hl = vis_hl }
+  if offline_tag ~= "" then
+    right_parts[#right_parts + 1] = { txt = "  ", hl = "NormalFloat" }
+    right_parts[#right_parts + 1] = { txt = offline_tag, hl = "ProjectsOfflineTag" }
+  end
   if show_owner_pill then
     local o_hl = get_author_pill_hl(gh_meta.owner)
     right_parts[#right_parts + 1] = { txt = " " .. owner_pill_str, hl = o_hl }
@@ -1527,8 +1543,9 @@ local function render_inspector(st)
     end
 
     local clean_path = (p.path or ""):gsub("^/+", "/")
-    local path_icon = (p.is_external or p.is_disconnected) and "󱊞 " or " "
-    add("  " .. path_icon .. clean_path, "ProjectsDir")
+    -- L'icona dell'unita' resta solo accanto al nome del volume, in alto a
+    -- destra: qui e sul titolo era la stessa cosa ripetuta tre volte.
+    add("  \u{f07c} " .. clean_path, "ProjectsDir")
     if gh_meta and (gh_meta.parent or gh_meta.is_fork) then
       local parent_str = gh_meta.parent and i18n.t("fork_of", gh_meta.parent) or i18n.t("fork_of_original")
       add("   " .. ICON_RELOCATE .. " " .. parent_str, "ProjectsGitBranch")
@@ -1657,28 +1674,56 @@ local function render_inspector(st)
       end
       add("   └" .. string.rep("─", inner_w + 4) .. "┘", "ProjectsHeaderMissing")
     elseif p.is_disconnected then
-      local box_title = i18n.t("external_box_title")
-      local box_rows = {
-        { text = i18n.t("external_box_line1"), hl = "ProjectsName" },
-        { text = fit(p.path, pw - 10), hl = "ProjectsDir" },
-        { text = "", hl = "ProjectsPostItText" },
-        { text = i18n.t("external_box_line2", p.volume_name or "SSD"), hl = "ProjectsPostItText" },
-        { text = "", hl = "ProjectsPostItText" },
-        { text = i18n.t("external_box_sync"), hl = "ProjectsGitBranch" },
-      }
-      local inner_w = dw(box_title) + 2
-      for _, row in ipairs(box_rows) do
-        inner_w = math.max(inner_w, dw(row.text))
-      end
-      inner_w = math.min(inner_w, math.max(20, pw - 10))
+      -- Riquadro dello stato scollegato. Ricostruito riga per riga invece che
+      -- con add(): add() colora l'intera riga, quindi la cornice prendeva il
+      -- colore del testo che conteneva e cambiava tinta a ogni riga. Qui la
+      -- cornice ha un colore suo e il contenuto il proprio, e la larghezza e'
+      -- una sola misura per tutti i bordi, cosi' il lato destro chiude dritto.
+      local vol = p.volume_name or "SSD"
+      local inner = math.max(34, math.min(pw - 10, 66))
+      local tag = " " .. i18n.t("offline_tag") .. " "
 
-      add("   ┌─ 󱊞 " .. box_title .. " " .. string.rep("─", math.max(0, inner_w - dw(box_title) - 1)) .. "┐", "ProjectsPostItText")
-      add("   │  " .. string.rep(" ", inner_w) .. " │", "ProjectsPostItText")
-      for _, row in ipairs(box_rows) do
-        local txt = fit(row.text, inner_w)
-        add("   │  " .. txt .. string.rep(" ", math.max(0, inner_w - dw(txt))) .. " │", row.hl)
+      local function frame(left, right)
+        lines[#lines + 1] = "   " .. left .. string.rep("─", inner + 2) .. right
+        hls[#hls + 1] = { #lines - 1, 3, #lines[#lines], "ProjectsOfflineBorder" }
       end
-      add("   └" .. string.rep("─", inner_w + 4) .. "┘", "ProjectsPostItText")
+
+      --- Una riga del riquadro: i bordi restano del colore della cornice,
+      --- il contenuto porta il proprio.
+      local function row(segments)
+        local body, marks, col = "", {}, 0
+        for _, seg in ipairs(segments) do
+          marks[#marks + 1] = { col, col + #seg[1], seg[2] }
+          body = body .. seg[1]
+          col = col + #seg[1]
+        end
+        local pad = math.max(0, inner - dw(body))
+        local line = "   │ " .. body .. string.rep(" ", pad) .. " │"
+        lines[#lines + 1] = line
+        local r = #lines - 1
+        local base = #"   │ "
+        hls[#hls + 1] = { r, 3, base, "ProjectsOfflineBorder" }
+        for _, m in ipairs(marks) do
+          hls[#hls + 1] = { r, base + m[1], base + m[2], m[3] }
+        end
+        hls[#hls + 1] = { r, #line - #"│", #line, "ProjectsOfflineBorder" }
+      end
+
+      frame("╭", "╮")
+      -- Prima riga: di quale unita' si tratta, e che non c'e'. Il resto sono
+      -- dettagli, questo e' il fatto.
+      local head = "󱊞  " .. vol
+      row({ { head, "ProjectsOfflineAccent" },
+            { string.rep(" ", math.max(1, inner - dw(head) - dw(tag))), "ProjectsOfflineText" },
+            { tag, "ProjectsOfflineTag" } })
+      row({ { "", "ProjectsOfflineText" } })
+      row({ { i18n.t("external_box_where"), "ProjectsOfflineText" } })
+      row({ { fit(p.path or "", inner), "ProjectsOfflinePath" } })
+      row({ { "", "ProjectsOfflineText" } })
+      for _, ln in ipairs({ i18n.t("external_box_how", vol), i18n.t("external_box_auto") }) do
+        row({ { fit(ln, inner), "ProjectsOfflineText" } })
+      end
+      frame("╰", "╯")
     else
       if p.loc_lines then
         local l_str = (p.loc_lines == 1) and i18n.t("loc_lines_1") or i18n.t("loc_lines", fmt_num(p.loc_lines))
@@ -1880,13 +1925,18 @@ local function render_inspector(st)
   local html_file = P.get_html_preview_file(p.path)
   local readme = P.readme_path(p.path)
 
+  -- Su un'unita' scollegata i file non ci sono: nota, albero e cronologia non
+  -- avrebbero nulla su cui lavorare, e un tasto che non fa niente e' peggio di
+  -- un tasto assente. Resta GitHub, che vive nella cache dei metadati e quindi
+  -- funziona anche a disco staccato.
+  local offline = p.is_disconnected or p.is_missing
   local footer_preview = {}
-  if not st.show_all_commits then
+  if not st.show_all_commits and not offline then
     footer_preview[#footer_preview + 1] = { " " .. i18n.t("btn_note") .. " ", "ProjectsLazyBtnLabel" }
     footer_preview[#footer_preview + 1] = { " n ", "ProjectsLazyBtnKey" }
   end
 
-  if has_git then
+  if has_git and not offline then
     if #footer_preview > 0 then
       footer_preview[#footer_preview + 1] = { "  ", "NormalFloat" }
     end
@@ -1894,13 +1944,15 @@ local function render_inspector(st)
     footer_preview[#footer_preview + 1] = { " c ", "ProjectsLazyBtnKey" }
   end
 
-  footer_preview[#footer_preview + 1] = { "  ", "NormalFloat" }
-  if readme then
-    footer_preview[#footer_preview + 1] = { " " .. i18n.t("btn_readme") .. " ", "ProjectsLazyBtnLabel" }
-  else
-    footer_preview[#footer_preview + 1] = { " " .. i18n.t("btn_tree") .. " ", "ProjectsLazyBtnLabel" }
+  if not offline then
+    footer_preview[#footer_preview + 1] = { "  ", "NormalFloat" }
+    if readme then
+      footer_preview[#footer_preview + 1] = { " " .. i18n.t("btn_readme") .. " ", "ProjectsLazyBtnLabel" }
+    else
+      footer_preview[#footer_preview + 1] = { " " .. i18n.t("btn_tree") .. " ", "ProjectsLazyBtnLabel" }
+    end
+    footer_preview[#footer_preview + 1] = { " s ", "ProjectsLazyBtnKey" }
   end
-  footer_preview[#footer_preview + 1] = { " s ", "ProjectsLazyBtnKey" }
 
 
 
@@ -4289,41 +4341,49 @@ function M.open()
     end)
   end
 
+  -- Collegamento e scollegamento di un'unita' esterna. Sta fuori dal giro
+  -- pesante e viene interrogato molto piu' spesso: costa uno `stat` per i soli
+  -- progetti esterni - di solito uno o due - mentre il resto del polling deve
+  -- lanciare processi git. Infilarlo li' dentro voleva dire accorgersi del
+  -- disco fino a cinque secondi dopo averlo inserito.
+  local function check_drives()
+    if closed then return end
+    local changed = false
+    for _, it in ipairs(st.all) do
+      if it.is_external or it.is_disconnected then
+        local there = vim.fn.isdirectory(it.path) == 1
+        if it.is_disconnected == there then
+          changed = true
+          break
+        end
+      end
+    end
+    if not changed then return end
+    -- Il disco e' cambiato davvero, ma se l'utente sta scrivendo si aspetta:
+    -- ricostruire la lista sotto le dita farebbe saltare la ricerca.
+    if ((vim.uv or vim.loop).now() - last_type_time) < 800 then return end
+
+    st.all = P.list(true)
+    filter(st)
+    P.load_git(st.all, function()
+      if not closed then
+        render_list(st)
+        if (st.view_mode or "inspector") == "inspector" then
+          render_preview(st)
+        end
+      end
+    end, true)
+    P.load_languages(st.all, function()
+      if not closed then render_list(st) end
+    end, true)
+  end
+
   local function live_refresh_git()
     if closed or is_refreshing_git then return end
     -- Priorità assoluta alla digitazione: se l'utente sta scrivendo nella ricerca,
     -- ritarda il polling di background per garantire 60 FPS e 0ms di latenza sui tasti.
     local now = (vim.uv or vim.loop).now()
     if (now - last_type_time) < 800 then return end
-
-    -- Rilevamento automatico collegamento/scollegamento unità esterne (SSD / USB)
-    local any_drive_changed = false
-    for _, it in ipairs(st.all) do
-      if it.is_disconnected and vim.fn.isdirectory(it.path) == 1 then
-        any_drive_changed = true
-        break
-      elseif not it.is_disconnected and it.is_external and vim.fn.isdirectory(it.path) == 0 then
-        any_drive_changed = true
-        break
-      end
-    end
-
-    if any_drive_changed then
-      st.all = P.list(true)
-      filter(st)
-      P.load_git(st.all, function()
-        if not closed then
-          render_list(st)
-          if (st.view_mode or "inspector") == "inspector" then
-            render_preview(st)
-          end
-        end
-      end, true)
-      P.load_languages(st.all, function()
-        if not closed then render_list(st) end
-      end, true)
-      return
-    end
 
     local prev_git = {}
     for _, it in ipairs(st.all) do
@@ -4387,7 +4447,10 @@ function M.open()
 
   vim.api.nvim_create_autocmd({ "FocusGained", "VimResume", "BufWritePost", "FileChangedShellPost" }, {
     group = grp,
-    callback = live_refresh_git,
+    callback = function()
+      check_drives()
+      live_refresh_git()
+    end,
   })
 
   vim.api.nvim_create_autocmd("VimResized", {
@@ -4424,6 +4487,8 @@ function M.open()
     if st.list and vim.api.nvim_win_is_valid(st.list.win) and vim.api.nvim_buf_is_valid(st.list.buf) then
       render_list(st, true)
     end
+
+    check_drives()
 
     live_git_tick = live_git_tick + 1
     if live_git_tick % 10 == 0 then
