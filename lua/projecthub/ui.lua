@@ -120,46 +120,47 @@ local LANG_TOKENS = {
 
 -- Distintivo del tipo di progetto: al posto della parola, il marchio.
 --
--- I glifi vengono dalla famiglia devicons, scelti confrontando le metriche del
--- font: sono quelli con l'inchiostro piu' vicino al centro della cella, quindi
--- i meno storti dentro un badge. La chiave e' minuscola perche' la stessa
--- tabella serve sia ai tipi di progetto (Android, Node) sia ai linguaggi usati
--- come ripiego quando nessun file indicatore dice di che progetto si tratta.
+-- Solo il colore, mai un fondo: il distintivo deve staccarsi dalla card senza
+-- diventare un secondo riquadro dentro un riquadro, percio' i gruppi usati sono
+-- quelli della tabella senza sfondo. La famiglia e' Material (md-language_*),
+-- l'unica che copre quasi tutti i linguaggi con lo stesso tratto; dove manca
+-- si ripiega su devicons, e Node tiene il suo esagono Font Awesome.
 local BADGES = {
-  android = { "\u{e70e}", "ProjectsPillAndroid" },
-  ios = { "\u{e711}", "ProjectsPillApple" },
-  swift = { "\u{e755}", "ProjectsPillSwift" },
-  gradle = { "\u{e7f2}", "ProjectsPillGradle" },
-  flutter = { "\u{e7dd}", "ProjectsPillFlutter" },
-  dart = { "\u{e798}", "ProjectsPillDart" },
-  rust = { "\u{e7a8}", "ProjectsPillRust" },
-  go = { "\u{e724}", "ProjectsPillGo" },
-  python = { "\u{e73c}", "ProjectsPillPython" },
-  node = { "\u{e718}", "ProjectsPillNode" },
-  javascript = { "\u{e74e}", "ProjectsPillJS" },
-  typescript = { "\u{e8ca}", "ProjectsPillTS" },
-  java = { "\u{e738}", "ProjectsPillJava" },
-  kotlin = { "\u{e81b}", "ProjectsPillKotlin" },
-  php = { "\u{e73d}", "ProjectsPillPHP" },
-  ruby = { "\u{e739}", "ProjectsPillRuby" },
-  elixir = { "\u{e7cd}", "ProjectsPillElixir" },
-  zig = { "\u{e6a9}", "ProjectsPillZig" },
-  lua = { "\u{e826}", "ProjectsPillLua" },
-  web = { "\u{e736}", "ProjectsPillHTML" },
-  html = { "\u{e736}", "ProjectsPillHTML" },
-  css = { "\u{e749}", "ProjectsPillCSS" },
-  vue = { "\u{e8dc}", "ProjectsPillVue" },
-  svelte = { "\u{e8b7}", "ProjectsPillSvelte" },
-  astro = { "\u{e735}", "ProjectsPillAstro" },
-  c = { "\u{e61e}", "ProjectsPillC" },
-  ["c++"] = { "\u{f0672}", "ProjectsPillCPP" },
-  ["c#"] = { "\u{e7b2}", "ProjectsPillCSharp" },
-  docker = { "\u{e7b0}", "ProjectsPillDocker" },
-  nix = { "\u{e843}", "ProjectsPillNix" },
-  terraform = { "\u{e8bd}", "ProjectsPillTerraform" },
-  sql = { "\u{e706}", "ProjectsPillSQL" },
-  shell = { "\u{e691}", "ProjectsPillShell" },
-  markdown = { "\u{e73e}", "ProjectsPillMarkdown" },
+  android = { "\u{f0032}", "ProjectsLangAndroid" },   -- nf-md-android
+  ios = { "\u{f0037}", "ProjectsLangApple" },         -- nf-md-apple_ios
+  go = { "\u{f07d3}", "ProjectsLangGo" },             -- nf-md-language_go
+  node = { "\u{ed0d}", "ProjectsLangNode" },          -- nf-fa-node_js
+  python = { "\u{f0320}", "ProjectsLangPython" },
+  java = { "\u{f0b37}", "ProjectsLangJava" },
+  kotlin = { "\u{f1219}", "ProjectsLangKotlin" },
+  rust = { "\u{f1617}", "ProjectsLangRust" },
+  swift = { "\u{f06e5}", "ProjectsLangSwift" },
+  typescript = { "\u{f06e6}", "ProjectsLangTS" },
+  javascript = { "\u{f031e}", "ProjectsLangJS" },
+  php = { "\u{f031f}", "ProjectsLangPHP" },
+  ruby = { "\u{f0d2d}", "ProjectsLangRuby" },
+  lua = { "\u{f08b1}", "ProjectsLangLua" },
+  web = { "\u{f031d}", "ProjectsLangHTML" },
+  html = { "\u{f031d}", "ProjectsLangHTML" },
+  css = { "\u{f031c}", "ProjectsLangCSS" },
+  c = { "\u{f0671}", "ProjectsLangC" },
+  ["c++"] = { "\u{f0672}", "ProjectsLangCPP" },
+  ["c#"] = { "\u{f031b}", "ProjectsLangCSharp" },
+  markdown = { "\u{f0354}", "ProjectsLangMarkdown" },
+  docker = { "\u{f0868}", "ProjectsLangDocker" },
+  nix = { "\u{f1105}", "ProjectsLangNix" },
+  vue = { "\u{f0844}", "ProjectsLangVue" },
+  -- Fuori dalla famiglia Material, che qui non arriva
+  flutter = { "\u{e7dd}", "ProjectsLangFlutter" },
+  dart = { "\u{e798}", "ProjectsLangDart" },
+  gradle = { "\u{e7f2}", "ProjectsLangGradle" },
+  elixir = { "\u{e7cd}", "ProjectsLangElixir" },
+  terraform = { "\u{e8bd}", "ProjectsLangTerraform" },
+  zig = { "\u{e6a9}", "ProjectsLangZig" },
+  svelte = { "\u{e8b7}", "ProjectsLangSvelte" },
+  astro = { "\u{e735}", "ProjectsLangAstro" },
+  sql = { "\u{e706}", "ProjectsLangSQL" },
+  shell = { "\u{e691}", "ProjectsLangShell" },
 }
 
 --- Distintivo da mostrare per un progetto: prima il tipo dedotto dai file di
@@ -287,6 +288,19 @@ local function set_hl()
     ProjectsLangZig = { fg = "#EC915C", bold = true, undercurl = false, sp = nil },
     ProjectsLangMarkdown = { fg = "#61AFEF", bold = true, undercurl = false, sp = nil },
     ProjectsLangShell = { fg = "#2ECC71", bold = true, undercurl = false, sp = nil },
+
+    -- Piattaforme che non sono un linguaggio ma un ecosistema. Stanno qui, e
+    -- non fra le pillole, perche' il distintivo del tipo e' solo il marchio
+    -- colorato: niente fondo dietro, come per tutti i colori di questa tabella.
+    ProjectsLangAndroid = { fg = "#3DDC84", bold = true, undercurl = false, sp = nil },
+    ProjectsLangApple = { fg = "#D6D9DC", bold = true, undercurl = false, sp = nil },
+    ProjectsLangNode = { fg = "#83CD29", bold = true, undercurl = false, sp = nil },
+    ProjectsLangGradle = { fg = "#02B5C3", bold = true, undercurl = false, sp = nil },
+    ProjectsLangFlutter = { fg = "#47C5FB", bold = true, undercurl = false, sp = nil },
+    ProjectsLangDocker = { fg = "#2496ED", bold = true, undercurl = false, sp = nil },
+    ProjectsLangNix = { fg = "#7EBAE4", bold = true, undercurl = false, sp = nil },
+    ProjectsLangTerraform = { fg = "#A067F5", bold = true, undercurl = false, sp = nil },
+    ProjectsLangElixir = { fg = "#A06CC4", bold = true, undercurl = false, sp = nil },
     ProjectsLangTrack = { fg = "#282C34" },
 
     -- Palette per i badge della barra di ricerca (SFONDO PILLOLA TENUE)
@@ -315,18 +329,6 @@ local function set_hl()
     ProjectsPillMarkdown = { fg = "#61AFEF", bg = "#1F2B38", bold = true, undercurl = false, sp = nil },
     ProjectsPillShell = { fg = "#2ECC71", bg = "#1B3326", bold = true, undercurl = false, sp = nil },
 
-    -- Piattaforme e strumenti: stessa costruzione dei linguaggi (colore acceso
-    -- del marchio su un fondo spento dello stesso tono), per i tipi di progetto
-    -- che non sono un linguaggio ma un ecosistema.
-    ProjectsPillAndroid = { fg = "#3DDC84", bg = "#16301F", bold = true, undercurl = false, sp = nil },
-    ProjectsPillApple = { fg = "#D6D9DC", bg = "#2A2D30", bold = true, undercurl = false, sp = nil },
-    ProjectsPillNode = { fg = "#83CD29", bg = "#1E2E12", bold = true, undercurl = false, sp = nil },
-    ProjectsPillGradle = { fg = "#02B5C3", bg = "#122C2F", bold = true, undercurl = false, sp = nil },
-    ProjectsPillFlutter = { fg = "#47C5FB", bg = "#152C38", bold = true, undercurl = false, sp = nil },
-    ProjectsPillDocker = { fg = "#2496ED", bg = "#12253A", bold = true, undercurl = false, sp = nil },
-    ProjectsPillNix = { fg = "#7EBAE4", bg = "#1A2A36", bold = true, undercurl = false, sp = nil },
-    ProjectsPillTerraform = { fg = "#A067F5", bg = "#251A38", bold = true, undercurl = false, sp = nil },
-    ProjectsPillElixir = { fg = "#A06CC4", bg = "#281F33", bold = true, undercurl = false, sp = nil },
   }
 
   -- Soft, subtle link & inline code background tint (SENZA BLOCCI INVASIVI)
