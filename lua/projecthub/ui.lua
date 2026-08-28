@@ -121,13 +121,21 @@ local LANG_TOKENS = {
 --- Etichetta del tipo di progetto. Il tipo dedotto dai file di build e' il
 --- dato piu' preciso; quando non c'e' - una cartella di appunti, un insieme di
 --- esercizi senza file indicatori - si ripiega sul linguaggio dominante, che la
---- barra dei linguaggi ha gia' calcolato e che vale comunque piu' di un badge
---- vuoto. Il colore resta uno solo per tutti: e' un'etichetta, non un semaforo.
+--- barra dei linguaggi ha gia' calcolato. Il colore resta uno solo per tutti:
+--- e' un'etichetta, non un semaforo.
+---
+--- "Markdown" e' escluso di proposito. Non viene riconosciuto insieme agli
+--- altri linguaggi - in LANG_MAP non c'e' - ma da un ramo a parte, che scatta
+--- solo quando nel progetto di codice non ce n'e': e' il segnaposto per "qui ci
+--- sono soltanto appunti". Etichettare una cartella di note come "Markdown"
+--- riempirebbe il badge senza dire niente, e nessun badge e' piu' onesto.
 --- @return string|nil
 local function type_label(p)
   if p.type then return p.type end
-  local top = p.languages and p.languages[1]
-  return (top and top.name) or nil
+  for _, l in ipairs(p.languages or {}) do
+    if l.name and l.name ~= "Markdown" then return l.name end
+  end
+  return nil
 end
 
 local render_list, render_preview, render_scrollbar, render_preview_scrollbar

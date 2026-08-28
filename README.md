@@ -313,7 +313,9 @@ require("projecthub").setup({
 
 The badge on a card names the project's ecosystem, in one colour for all of them: it is a label, not a signal, and giving each type its own hue turned a wall of cards into a wall of confetti.
 
-Detection reads the build file first, because that is the precise answer - `pubspec.yaml` means Flutter, `go.mod` means Go, `pom.xml` means Java - and the order runs from specific to general, so a `Dockerfile` only speaks when nothing else does. When a project has no build file at all - a notes repository, a folder of exercises - the badge falls back to the dominant language already computed for the language bar, which costs nothing and beats an empty badge.
+Detection reads the build file first, because that is the precise answer - `pubspec.yaml` means Flutter, `go.mod` means Go, `pom.xml` means Java - and the order runs from specific to general, so a `Dockerfile` only speaks when nothing else does. When a project has no build file at all - a folder of exercises, say - the badge falls back to the dominant language already computed for the language bar, which costs nothing and beats an empty badge.
+
+Markdown is skipped on purpose. It is not recognised alongside the other languages - it is absent from the extension map - but produced by a separate branch that only fires when the project contains no code at all, so it is really a placeholder for "notes only". Labelling a notes folder "Markdown" would fill the badge without saying anything, and no badge is more honest. A project with nothing relevant to report simply gets none.
 
 ---
 
