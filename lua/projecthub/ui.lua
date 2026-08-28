@@ -1713,25 +1713,28 @@ local function render_inspector(st)
       local word_w = word and dw(word[1]) or 0
 
       -- Il font a blocchi ci sta solo se il pannello e' abbastanza largo.
-      -- Quando non ci sta la parola non si stira con gli spazi - diventerebbe
-      -- una riga di lettere sparse, che si legge peggio di una scritta normale
-      -- e non e' piu' un titolo: passa dentro il riquadro, come pillola, dove
-      -- ha un fondo che la tiene insieme.
+      -- Quando non ci sta, la parola resta al suo posto scritta normalmente:
+      -- stesso colore, stessa posizione, solo in caratteri veri. Stirarla con
+      -- gli spazi la rendeva una fila di lettere sparse, che si legge peggio
+      -- di una scritta normale e non sembra piu' nemmeno un titolo.
       local big = word and word_w <= pw - 4
 
+      add("")
+      add("")
       if big then
-        add("")
-        add("")
         local pad = string.rep(" ", math.max(0, math.floor((pw - word_w) / 2)))
         for _, l in ipairs(word) do
           lines[#lines + 1] = pad .. l
           hls[#hls + 1] = { #lines - 1, #pad, #(pad .. l), "ProjectsOfflineAccent" }
         end
-        add("")
-        add("")
       else
-        add("")
+        local plain = i18n.t("offline_tag")
+        local pad = string.rep(" ", math.max(0, math.floor((pw - dw(plain)) / 2)))
+        lines[#lines + 1] = pad .. plain
+        hls[#hls + 1] = { #lines - 1, #pad, #(pad .. plain), "ProjectsOfflineAccent" }
       end
+      add("")
+      add("")
 
       local inner = math.max(34, math.min(pw - 8, 64))
       local box_w = inner + 4
@@ -1765,12 +1768,7 @@ local function render_inspector(st)
       end
 
       frame("╭", "╮")
-      if big then
-        row({ { "󱊞  " .. vol, "ProjectsOfflineAccent" } })
-      else
-        row({ { " " .. i18n.t("offline_tag") .. " ", "ProjectsOfflineTag" },
-              { "   󱊞  " .. vol, "ProjectsOfflineAccent" } })
-      end
+      row({ { "󱊞  " .. vol, "ProjectsOfflineAccent" } })
       row({ { "", "ProjectsOfflineText" } })
       row({ { i18n.t("external_box_where"), "ProjectsOfflineText" } })
       row({ { fit(p.path or "", inner), "ProjectsOfflinePath" } })

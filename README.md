@@ -295,7 +295,7 @@ A project living on an external drive is not missing when the drive is unplugged
 
 The offline panel is built for one job, so it says one thing loudly: the state is spelled out in block letters across the middle of the pane, in amber, the way the opening screen spells the plugin's name. It is the headline of that screen, not a note in the corner, so there is no badge repeating it in the top right and no section heading announcing a panel that contains a single message. Below it, centred, a dimmed frame holds the two things left to know - where the project lives, and that plugging the drive back in is the whole remedy. The drive glyph appears once, beside the volume name, instead of on the title, the folder line and the status row as well.
 
-Panes too narrow for the block letters do not stretch the word out with spaces - scattered capitals read worse than plain ones and stop being a headline at all. The word moves inside the frame instead, as a filled pill next to the volume name, where a background holds it together.
+Panes too narrow for the block letters keep the word exactly where it is, written in ordinary characters and the same amber. Only the size changes.
 
 The footer is modular: on an unplugged drive there are no files, so Note, Tree and Commit would be keys that do nothing, and a key that does nothing is worse than an absent one. GitHub stays - its URL lives in the metadata cache, so it works with the drive out.
 
