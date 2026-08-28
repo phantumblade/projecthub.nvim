@@ -63,6 +63,23 @@ M.defaults = {
     org = "\u{f42b} ", -- nf-oct-organization
     member = "\u{f007} ", -- nf-fa-user
     fork = "\u{ea63} ", -- nf-cod-repo_forked
+    ai = "\u{f51b} ", -- nf-oct-sparkle_fill: assistenti (Claude, Copilot, ...)
+    bot = "\u{f06a9} ", -- nf-md-robot: pipeline e bot (CI, dependabot, ...)
+    -- Campanella delle notifiche, accanto al titolo della cronologia. La
+    -- coppia e' scelta fra le famiglie Material perche' i due glifi hanno
+    -- esattamente lo stesso ingombro (ink 0..750 su una cella da 600): cosi'
+    -- l'icona non si sposta dentro il riquadro quando cambia stato. Le
+    -- corrispondenti Font Awesome differivano di mezza cella fra loro.
+    bell_on = "\u{f009a}",  -- nf-md-bell
+    bell_off = "\u{f00a0}", -- nf-md-bell_sleep
+  },
+
+  -- Nomi aggiuntivi da trattare come non umani, oltre a quelli riconosciuti di
+  -- serie. Il confronto e' per parole intere sul nome dell'autore, quindi qui
+  -- basta il termine: { ai = { "atlas" }, bot = { "deploybot" } }.
+  bots = {
+    ai = {},
+    bot = {},
   },
 
   -- Dimensioni e proporzioni della finestra.
@@ -94,6 +111,24 @@ M.defaults = {
     color = "#E3B341", -- colore d'accento del riquadro (bordo, titolo, stella)
     title = nil,       -- testo del titolo; nil = usa quello tradotto
     sound = "achievement", -- nome del suono, oppure false per notificare in silenzio
+  },
+
+  -- Commit in arrivo dai collaboratori. La cronologia mostra sempre i commit
+  -- del repository locale; quando su upstream ne compaiono di piu' recenti, un
+  -- `git fetch` di sfondo li rileva e l'ispettore li elenca sopra un divider,
+  -- separati dal punto in cui sei sincronizzato. Il fetch aggiorna solo i
+  -- riferimenti remoti: HEAD, indice e working tree non vengono mai toccati.
+  incoming = {
+    enabled = true,  -- false per non interrogare mai la rete
+    interval = 300,  -- secondi fra due fetch dello stesso repository (minimo 60)
+    timeout = 15,    -- secondi oltre i quali un fetch bloccato viene abbandonato
+    notify = true,   -- avvisa quando compaiono commit nuovi
+    -- Oltre questo numero di autori un progetto viene seguito in silenzio e da
+    -- lontano: tante firme significano quasi sempre un repository altrui che
+    -- hai clonato, dove un commit nuovo non e' una notizia che ti riguarda.
+    -- Il divider continua comunque a comparire. Il tasto b nella dashboard
+    -- forza la scelta per il singolo progetto, in entrambe le direzioni.
+    notify_max_authors = 5,
   },
 
   -- Callback invocata quando apri un progetto (tasto Enter). Riceve il

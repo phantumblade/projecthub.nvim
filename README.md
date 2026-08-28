@@ -223,11 +223,91 @@ require("projecthub").setup({
     sound = "achievement",  -- Sound name, or false to notify silently
   },
 
+  -- Incoming commits. The history always shows your local repository; when
+  -- upstream has newer commits a background `git fetch` picks them up and the
+  -- inspector lists them above a divider, separated from the point you are
+  -- synced at. The fetch only updates remote refs: HEAD, the index and the
+  -- working tree are never touched.
+  incoming = {
+    enabled = true,   -- false to never reach out to the network
+    interval = 300,   -- Seconds between two fetches of the same repo (minimum 60)
+    timeout = 15,     -- Seconds after which a stuck fetch is abandoned
+    notify = true,    -- Announce when new commits show up
+    notify_max_authors = 5, -- Above this many contributors: followed silently,
+                            -- and from further away. `b` overrides per project.
+  },
+
   -- Custom open callback. If nil, defaults to:
   -- changing cwd (`cd`), opening README.md in main buffer, and opening Neo-tree.
   on_open = nil,
 })
 ```
+
+
+---
+
+## Incoming commits
+
+The dashboard reads your local clone. Until something runs `git fetch`, commits your collaborators pushed to the remote simply do not exist as far as the repository on disk is concerned — the panel would faithfully show a version of the project that is days behind, with no hint that anything is missing.
+
+ProjectHub closes that gap with a throttled background fetch. Every repository with an upstream is refreshed at most once per `interval` (300s by default), through `jobstart`, so nothing ever blocks the editor. The fetch updates remote refs and nothing else: `HEAD`, the index and the working tree are left exactly as they were, and no merge is ever attempted on your behalf. Deciding when to pull stays yours.
+
+What comes back is `git log HEAD..@{u}` — the commits that exist upstream and not yet locally. They are rendered **above** a divider that marks the point you are synced at:
+
+```
+ 󰋚 CRONOLOGIA COMMIT GIT  (I 5 commit più recenti)
+  6a5c132 󰘬 origin/main   CHORE  Formattazione e pulizia…    25 ore fa   lama-development
+  31cbb9c 󰘬 origin/main   FEAT   Aggiunta API statistiche…  25 ore fa   lama-development
+  a31e520 󰘬 origin/main   FEAT   Selezione di posizioname…  4 giorni fa lama-development
+  ─────────────────── ↓ 3 nuovi commit su origin/main ───────────────────
+  6ac5473 󰘬 main   DOCS   Aggiunta guida completa…          5 giorni fa Andrea Perini
+  587fc76 󰘬 main   FIX    Corretta sequenza warm-up…        5 giorni fa Andrea Perini
+```
+
+Everything above the line is on the remote; everything below is the version you actually have. Incoming rows carry the upstream branch name instead of the local one and an amber hash, so the two never blur together. Contributor roles — the owner crown included — are resolved the same way as for local commits.
+
+The overview keeps the three freshest and counts the rest; `c` opens the full history and lists them all.
+
+### Staying quiet and staying cheap
+
+Discoveries come back one repository at a time, in whatever order the fetches finish. Announcing each one turned opening the dashboard into a wall of notifications, so they are collected and **a single notice** goes out once the burst settles — naming the project when there is one, or listing them when there are several. One redraw per burst, too.
+
+Not every repository deserves an announcement. A project with a handful of contributors is yours or a small group's, and a commit from someone else is news. A project with a dozen is almost always somebody else's repository you cloned, where new commits are just weather. So above `notify_max_authors` (5 by default) a project is followed **silently and from four times further away** — the divider still appears in the panel, only the notification is withheld. The author count comes from the shortlog `load_git` already runs, so the decision costs nothing.
+
+Press **`b`** on any project to override that in either direction: mute the small project you do not care about, or watch the crowded one you do. The choice is remembered across sessions, and a project whose contributor count later grows past the threshold falls back to the automatic behaviour rather than staying pinned. A bell beside the commit history header shows the current state - gold when notices are on, grey when muted - with the key to flip it.
+
+Three more rules keep the cost invisible:
+
+- **A sliding window**, never a stampede: at most 3 fetches run at once, the rest queue behind them.
+- **Backoff**: every fetch that finds nothing doubles the wait for that repository, up to 8× the interval. Repositories that actually move keep the base rhythm; dormant ones drift towards half-hourly.
+- **Typing wins**: no git process is ever spawned while you are typing in the search, and the first sweep waits until the window has drawn and settled.
+- **A remembered baseline**: what you have already seen is kept on disk (`incoming_seen.json`), so reopening Neovim does not re-announce the same backlog. Only what appeared since the last look is news.
+
+---
+
+## Machines in the history
+
+A commit written by a pipeline or an assistant does not read like one written by hand, and a history is easier to scan when you can tell them apart at a glance. Non-human authors get their own glyph and a single shared colour - fuchsia, the one hue the six author pills do not use - so the question "did a machine write this?" is answered by colour before you read the name:
+
+- **Assistants** (Claude, Copilot, Cursor, Devin, Codex, Gemini, ...) carry a sparkle.
+- **Pipelines and bots** (`github-actions[bot]`, `dependabot`, `renovate`, `pre-commit ci`, ...) carry a robot.
+
+Matching is on **whole words**, never substrings. `Claudel`, `Claudia`, `Abbott` and `Botticelli` stay people - marking a real person as a machine is the worst mistake this can make, so the bare token `ai` is deliberately absent from the list (`Ai` is a common given name; `Devin AI` is still caught, by `devin`). Adjacent words are joined before matching too, so `pre-commit ci` reads as one term.
+
+Add your own names when something slips through:
+
+```lua
+require("projecthub").setup({
+  bots = {
+    ai  = { "atlas" },      -- your in-house assistant
+    bot = { "deploybot" },  -- your CI account
+  },
+})
+```
+
+`tests/authors_spec.lua` pins the behaviour, false positives included.
+
+After you pull, the divider disappears on the next refresh — the recount is local, so it does not wait for the following fetch. A repository without a remote, without an upstream branch, or whose fetch fails is simply left alone: nothing is invented, and a fetch that hangs on a credential prompt is abandoned after `timeout` seconds.
 
 ---
 
@@ -256,6 +336,7 @@ require("projecthub").setup({
 | `w` | **Web Preview** | Open project `index.html` in default web browser |
 | `g` | **Git Remote** | Open repository URL (GitHub / GitLab / Bitbucket) in browser |
 | `n` / `e` | **Notes** | Open scratchpad note editor for the selected project |
+| `b` | **Bell** | Mute or unmute new-commit notices; the bell beside the history title shows the state |
 | `a` | **Add Project** | Open interactive folder browser to track a new project |
 | `r` | **Reconnect** | Reconnect a missing/moved project to its new directory |
 | `d` | **Untrack** | Remove project tracking from custom extras |

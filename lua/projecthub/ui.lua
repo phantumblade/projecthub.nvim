@@ -57,6 +57,10 @@ M.OWNER_ICON = config.options.icons.owner
 M.ORG_ICON = config.options.icons.org
 M.MEMBER_ICON = config.options.icons.member
 M.FORK_ICON = config.options.icons.fork
+M.AI_ICON = config.options.icons.ai
+M.BOT_ICON = config.options.icons.bot
+M.BELL_ON_ICON = config.options.icons.bell_on
+M.BELL_OFF_ICON = config.options.icons.bell_off
 
 local VISIBILITY_TOKENS = {
   pubblico = { type = "public", name = ICON_GLOBE .. " PUBBLICO", hl = "ProjectsHeaderPublic" },
@@ -272,6 +276,27 @@ local function set_hl()
     ProjectsKeyText = { fg = "#7aa2f7", bold = true },
 
     ProjectsCommitHash = { fg = "#7aa2f7", bold = true },
+
+    -- Commit presenti su upstream ma non ancora in locale. Restano in grigio,
+    -- lo stesso delle date: sono identificatori che in locale non esistono
+    -- ancora, quindi non devono richiamare l'occhio piu' della cronologia vera.
+    -- L'arancione, oltre a gridare, prometteva un'urgenza che qui non c'e'.
+    ProjectsIncomingHash = { fg = "#565f89" },
+    ProjectsIncomingLabel = { fg = "#565f89" },
+    ProjectsIncomingLine = { fg = "#3b4763" },
+
+    -- Interruttore delle notifiche accanto al titolo della cronologia. L'oro
+    -- dice "sveglia", il grigio spento dice "muta" ed e' lo stesso tono con cui
+    -- il pannello segna tutto cio' che non e' attivo.
+    --
+    -- Senza sfondo, di proposito: nessuna campanella del font ha l'inchiostro
+    -- centrato nella propria cella (md-bell occupa 0..750 su una cella da 600,
+    -- quindi pende di 0,125 celle a destra) e la griglia del terminale si
+    -- sposta solo di celle intere. Un riquadro non farebbe che dare all'occhio
+    -- il righello per misurare quello scarto; il badge del tasto qui accanto
+    -- basta gia' a dire che c'e' qualcosa da premere.
+    ProjectsWatchOn = { fg = "#e0af68", bold = true },
+    ProjectsWatchOff = { fg = "#565f89" },
     ProjectsCommitBranch = { fg = "#73daca" },
     ProjectsCommitAuthor = { fg = "#2ac3de" },
     ProjectsCommitAuthorPill = { fg = "#7aa2f7", bg = "#273147", bold = true },
@@ -281,6 +306,12 @@ local function set_hl()
     ProjectsAuthorPill_4 = { fg = "#ff9e64", bg = "#38271e", bold = true },
     ProjectsAuthorPill_5 = { fg = "#e0af68", bg = "#332b1b", bold = true },
     ProjectsAuthorPill_6 = { fg = "#f7768e", bg = "#382028", bold = true },
+
+    -- Autori non umani. Un solo colore per tutti - fucsia, l'unica tinta che le
+    -- sei pillole degli autori non usano - cosi' la domanda "questo l'ha
+    -- scritto una macchina?" si risolve col colore, prima ancora di leggere il
+    -- nome. Il glifo poi distingue l'assistente dalla pipeline.
+    ProjectsAuthorPillBot = { fg = "#ea76cb", bg = "#35213a", bold = true },
     ProjectsCommitDate = { fg = "#565f89" },
     ProjectsPostItText = { fg = "#e0af68", bold = true },
     ProjectsPostItMuted = { fg = "#565f89", italic = true },
@@ -459,7 +490,8 @@ local notify_mod = require("projecthub.notify")
 local NOTIFY_THEMES = notify_mod.themes
 local notify = notify_mod.notify
 
-local function get_author_pill_hl(author_name)
+local function get_author_pill_hl(author_name, kind)
+  if kind then return "ProjectsAuthorPillBot" end
   local clean = tostring(author_name or "user"):lower():gsub("[%s%-_%./\\]", "")
   local h = 0
   for i = 1, #clean do
@@ -1251,7 +1283,11 @@ local function render_inspector(st)
     local date_str = i18n.format_relative_time(tostring(c.age or ""))
     local author_name = tostring(c.author or "")
     local role_icon = M.MEMBER_ICON
-    if c.is_owner then
+    if c.kind == "ai" then
+      role_icon = M.AI_ICON
+    elseif c.kind == "bot" then
+      role_icon = M.BOT_ICON
+    elseif c.is_owner then
       role_icon = M.OWNER_ICON
     end
     local author_pill = (c.show_author and author_name ~= "") and (" " .. role_icon .. author_name .. " ") or ""
@@ -1279,7 +1315,8 @@ local function render_inspector(st)
     c0 = c0 + #indent
 
     local c_hash_end = c0 + #hash_str
-    hls[#hls + 1] = { row_idx, c0, c_hash_end, "ProjectsCommitHash" }
+    hls[#hls + 1] = { row_idx, c0, c_hash_end,
+      c.is_incoming and "ProjectsIncomingHash" or "ProjectsCommitHash" }
     c0 = c_hash_end
 
     local c_branch_end = c0 + #b_str
@@ -1311,9 +1348,62 @@ local function render_inspector(st)
 
     if #author_pill > 0 then
       local pill_start = date_end + #gap
-      local author_hl = get_author_pill_hl(author_name)
+      local author_hl = get_author_pill_hl(author_name, c.kind)
       hls[#hls + 1] = { row_idx, pill_start, #full_line, author_hl }
     end
+  end
+
+  -- Riga di confine fra i commit scaricati da upstream e il punto in cui il
+  -- clone locale e' fermo. Tutto cio' che sta sopra non e' ancora sceso a
+  -- terra; tutto cio' che sta sotto e' la versione che hai davvero.
+  local function add_incoming_divider(count, upstream, max_w)
+    local label = " \u{2193} " .. ((count == 1)
+      and i18n.t("incoming_divider_1", upstream)
+      or i18n.t("incoming_divider", count, upstream)) .. " "
+    local indent = "   "
+    -- Il tratto si divide in due meta' per tenere l'etichetta al centro; il
+    -- resto della divisione va a destra, cosi' la riga finisce sempre esatta.
+    local rule_w = math.max(0, max_w - dw(indent) - dw(label))
+    local left_w = math.floor(rule_w / 2)
+    local left_rule = string.rep("\u{2500}", left_w)
+    local right_rule = string.rep("\u{2500}", rule_w - left_w)
+
+    local line = indent .. left_rule .. label .. right_rule
+    lines[#lines + 1] = line
+    local row = #lines - 1
+
+    local c0 = #indent
+    local c1 = c0 + #left_rule
+    local c2 = c1 + #label
+    hls[#hls + 1] = { row, c0, c1, "ProjectsIncomingLine" }
+    hls[#hls + 1] = { row, c1, c2, "ProjectsIncomingLabel" }
+    hls[#hls + 1] = { row, c2, #line, "ProjectsIncomingLine" }
+  end
+
+  -- I commit in arrivo portano il nome del ramo remoto invece di quello
+  -- locale: e' li' che vivono finche' non fai pull.
+  local incoming_entry = (not (p.is_missing or p.is_disconnected)) and P.get_incoming(p.path) or nil
+  local incoming = incoming_entry and P.tag_commit_roles(p.path, incoming_entry.commits) or {}
+  local incoming_up = (incoming_entry and incoming_entry.upstream) or "origin"
+  -- Solo il nome del ramo, senza il prefisso del remote: "origin/main" veniva
+  -- ripetuto su ogni riga mentre il divider lo dice gia', e allargava la
+  -- colonna rubando spazio al soggetto del commit.
+  local incoming_branch = "[" .. incoming_up:gsub("^[^/]+/", "") .. "]"
+
+  -- La campanella sta appesa al titolo della cronologia, non fra i pulsanti in
+  -- basso: e' li' che si guarda quando ci si chiede perche' un progetto non
+  -- avvisa mai, e li' vale la pena poterlo cambiare senza cercare altrove.
+  local watch_on = P.is_watched(p.path, P.author_count(p))
+  local function add_history_title(text, hl)
+    local bell = " " .. (watch_on and M.BELL_ON_ICON or M.BELL_OFF_ICON) .. " "
+    local key = " b "
+    local gap = "   "
+    lines[#lines + 1] = text .. gap .. bell .. key
+    local row = #lines - 1
+    hls[#hls + 1] = { row, 0, #text, hl }
+    local c0 = #text + #gap
+    hls[#hls + 1] = { row, c0, c0 + #bell, watch_on and "ProjectsWatchOn" or "ProjectsWatchOff" }
+    hls[#hls + 1] = { row, c0 + #bell, c0 + #bell + #key, "ProjectsLazyBtnKey" }
   end
 
   -- Header Info with Top-Right GitHub Badges (Visibility, Owner, Stars, Forks)
@@ -1430,7 +1520,11 @@ local function render_inspector(st)
         local c_num = ast.count or 0
         local pct = math.floor((c_num / tot_c) * 100 + 0.5)
         local role_icon = M.MEMBER_ICON
-        if ast.is_owner then
+        if ast.kind == "ai" then
+          role_icon = M.AI_ICON
+        elseif ast.kind == "bot" then
+          role_icon = M.BOT_ICON
+        elseif ast.is_owner then
           role_icon = M.OWNER_ICON
         end
         local pill_str = role_icon .. a_name
@@ -1446,7 +1540,7 @@ local function render_inspector(st)
 
         local p_start = #indent
         local p_end = p_start + #pill_str
-        local a_hl = get_author_pill_hl(a_name)
+        local a_hl = get_author_pill_hl(a_name, ast.kind)
         hls[#hls + 1] = { r_idx, p_start, p_end, a_hl }
 
         local s_start = #full_line - #stat_str
@@ -1477,12 +1571,20 @@ local function render_inspector(st)
     local total_git_commits = (p.git and tonumber(p.git.commits)) or #commits
     if total_git_commits > #commits then
       local c_title = string.format("%s (%d di %d commit caricati - Scorri per caricarne altri)", i18n.t("title_commits"), #commits, total_git_commits)
-      add("  " .. ICON_GIT .. " " .. c_title, "ProjectsTitleSpecial")
+      add_history_title("  " .. ICON_GIT .. " " .. c_title, "ProjectsTitleSpecial")
     else
-      add("  " .. ICON_HISTORY .. " " .. i18n.t("commits_full", #commits), "ProjectsName")
+      add_history_title("  " .. ICON_HISTORY .. " " .. i18n.t("commits_full", #commits), "ProjectsName")
     end
 
-    if #commits > 0 then
+    if #commits > 0 or #incoming > 0 then
+      -- Sopra il divider i commit gia' presenti su upstream, dal piu' recente;
+      -- sotto, invariata, la cronologia del clone locale.
+      for _, c in ipairs(incoming) do
+        add_commit_row(c, incoming_branch, pw - 4)
+      end
+      if #incoming > 0 then
+        add_incoming_divider(#incoming, incoming_up, pw - 4)
+      end
       for _, c in ipairs(commits) do
         add_commit_row(c, branch_str, pw - 4)
       end
@@ -1562,11 +1664,28 @@ local function render_inspector(st)
 
   if not (p.is_missing or p.is_disconnected) then
     add("")
-    add("  " .. ICON_HISTORY .. " " .. i18n.t("commits_recent"), "ProjectsName")
+    -- Silenziare non nasconde niente: la cronologia resta completa, divider
+    -- compreso. Cambia solo che nessuna notifica partira', e lo dice la
+    -- campanella qui accanto.
+    add_history_title("  " .. ICON_HISTORY .. " " .. i18n.t("commits_recent"), "ProjectsName")
 
     local visible_commits = math.min(5, #commits)
-    if visible_commits > 0 then
+    if visible_commits > 0 or #incoming > 0 then
       local branch_str = (p.git and p.git.branch) and ("[" .. tostring(p.git.branch) .. "]") or "[main]"
+
+      -- In panoramica bastano le novita' piu' fresche: la cronologia completa
+      -- ('c') le elenca comunque tutte, senza comprimere niente.
+      local inc_shown = math.min(3, #incoming)
+      for i = 1, inc_shown do
+        add_commit_row(incoming[i], incoming_branch, pw - 4)
+      end
+      if #incoming > inc_shown then
+        add("   " .. i18n.t("incoming_more", #incoming - inc_shown), "ProjectsIncomingLabel")
+      end
+      if #incoming > 0 then
+        add_incoming_divider(#incoming, incoming_up, pw - 4)
+      end
+
       for i = 1, visible_commits do
         add_commit_row(commits[i], branch_str, pw - 4)
       end
@@ -3841,6 +3960,22 @@ function M.open()
 
   map(all_bufs, "n", { "n", "e" }, prompt_note)
 
+  -- `b` come la campanella che compare accanto al titolo della cronologia.
+  -- Serve a scavalcare l'euristica sul numero di autori nei due casi in cui
+  -- sbaglia: il progettino a tre mani che non ti interessa, e il repository
+  -- affollato a cui invece tieni.
+  map(all_bufs, "n", { "b" }, function()
+    if st.welcome_mode or st.dir_picker_mode then return end
+    local p_sel = st.items[st.sel]
+    if not p_sel or p_sel.is_missing or not (p_sel.git and not p_sel.git.none) then return end
+
+    local on = P.toggle_watch(p_sel.path, P.author_count(p_sel))
+    notify(i18n.t(on and "watch_on" or "watch_off", p_sel.name), nil,
+      on and "toggle" or "warn", on and "toggle_on" or "toggle_off")
+    render_list(st)
+    if (st.view_mode or "inspector") == "inspector" then render_preview(st) end
+  end)
+
   map(all_bufs, "n", { "/", "f", "i" }, function()
     -- nel benvenuto non c'e' nulla da cercare: la ricerca resta disabilitata
     if st.welcome_mode and not st.dir_picker_mode then return end
@@ -4041,6 +4176,82 @@ function M.open()
   local is_refreshing_git = false
   local last_type_time = 0
 
+  -- Le scoperte rientrano una per repository e in ordine sparso, man mano che
+  -- i fetch tornano: annunciarle appena arrivano riempiva lo schermo di
+  -- notifiche all'apertura. Qui si accumulano e ne parte una sola, che dice
+  -- quali progetti si sono mossi. Anche il ridisegno e' uno solo.
+  local pending_incoming = {}
+  local pending_render = false
+  local incoming_notice_gen = 0
+
+  local function flush_incoming_notice()
+    local batch = pending_incoming
+    local want_render = pending_render
+    pending_incoming = {}
+    pending_render = false
+    if closed then return end
+
+    if #batch == 1 then
+      local e = batch[1]
+      notify((e.added == 1)
+        and i18n.t("notify_incoming_1", e.name, e.upstream)
+        or i18n.t("notify_incoming", e.name, e.added, e.upstream), nil, "snap", "snap")
+    elseif #batch > 1 then
+      local parts, total = {}, 0
+      for _, e in ipairs(batch) do
+        parts[#parts + 1] = string.format("%s +%d", e.name, e.added)
+        total = total + e.added
+      end
+      notify(i18n.t("notify_incoming_many", #batch, total),
+        "   " .. table.concat(parts, "   "), "snap", "snap")
+    end
+
+    -- Un solo ridisegno per raffica, e comunque anche quando non c'e' niente
+    -- da annunciare: i progetti silenziati mostrano il divider come gli altri.
+    if want_render then
+      render_list(st)
+      if (st.view_mode or "inspector") == "inspector" then
+        render_preview(st)
+      end
+    end
+  end
+
+  -- Commit spinti dai collaboratori su upstream. Quali repository siano
+  -- scaduti, con che frequenza e chi meriti una notifica lo decide
+  -- refresh_incoming_all: qui si raccoglie solo il risultato.
+  local function refresh_incoming_now()
+    if closed then return end
+    -- Stessa precedenza assoluta alla digitazione che vale per il resto del
+    -- polling: nessun processo git mentre l'utente sta cercando.
+    if ((vim.uv or vim.loop).now() - last_type_time) < 800 then return end
+
+    P.refresh_incoming_all(st.all, function(path, entry, added, notifiable)
+      if closed then return end
+      pending_render = true
+
+      if notifiable and added > 0 then
+        for _, it in ipairs(st.all) do
+          if it.path == path then
+            pending_incoming[#pending_incoming + 1] = {
+              name = it.name,
+              added = added,
+              upstream = entry.upstream or "origin",
+            }
+            break
+          end
+        end
+      end
+
+      -- Finestra di raccolta: ogni nuova scoperta la riapre, cosi' l'annuncio
+      -- parte quando la raffica di fetch si e' esaurita.
+      incoming_notice_gen = incoming_notice_gen + 1
+      local gen = incoming_notice_gen
+      vim.defer_fn(function()
+        if gen == incoming_notice_gen then flush_incoming_notice() end
+      end, 1500)
+    end)
+  end
+
   local function live_refresh_git()
     if closed or is_refreshing_git then return end
     -- Priorità assoluta alla digitazione: se l'utente sta scrivendo nella ricerca,
@@ -4091,13 +4302,13 @@ function M.open()
     P.load_git(st.all, function()
       is_refreshing_git = false
       if not closed then
-        local updated_project = nil
+        local grown = {}
         local any_changed = false
         for _, it in ipairs(st.all) do
           local old = prev_git[it.path]
           if old and it.git and not it.git.none then
             if (it.git.commits or 0) > (old.commits or 0) then
-              updated_project = it
+              grown[#grown + 1] = it
               any_changed = true
             elseif (it.git.commits or 0) ~= (old.commits or 0) or (it.git.dirty ~= old.dirty) then
               any_changed = true
@@ -4105,8 +4316,15 @@ function M.open()
           end
         end
 
-        if updated_project then
-          notify(i18n.t("notify_git_update", updated_project.name), nil, "snap", "snap")
+        -- Una notifica per ciascun progetto cresciuto: prima la variabile
+        -- veniva sovrascritta nel ciclo e ne partiva una sola, per l'ultimo
+        -- trovato, mentre gli altri cambiamenti sparivano in silenzio.
+        for _, it in ipairs(grown) do
+          notify(i18n.t("notify_git_update", it.name), nil, "snap", "snap")
+          -- HEAD si e' mosso, tipicamente per un pull: cio' che risultava in
+          -- arrivo e' appena atterrato. Il ricalcolo locale non tocca la rete
+          -- e fa sparire il divider subito, invece che al fetch successivo.
+          P.recount_incoming(it.path)
         end
 
         if any_changed then
@@ -4117,6 +4335,8 @@ function M.open()
         end
       end
     end, true)
+
+    refresh_incoming_now()
   end
 
   vim.api.nvim_create_autocmd({ "TextChangedI", "TextChanged" }, {
@@ -4178,6 +4398,13 @@ function M.open()
   P.load_git(st.all, function()
     if not closed then reapply(st) end
   end)
+
+  -- Il primo giro di rete non parte insieme all'apertura: la finestra deve
+  -- prima disegnarsi e accettare i primi tasti senza contendersi la CPU con
+  -- una manciata di processi git.
+  vim.defer_fn(function()
+    if not closed then refresh_incoming_now() end
+  end, 3000)
 
   -- Caricamento Asincrono non bloccante 2 (O(N) Lazy): Percentuali dei Linguaggi
   P.load_languages(st.all, function()

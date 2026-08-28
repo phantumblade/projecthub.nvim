@@ -939,6 +939,66 @@ function M.has_commit_cache(key)
   return COMMIT_CACHE[key] ~= nil
 end
 
+------------------------------------------------------- autori non umani
+-- Un commit firmato da una pipeline o da un assistente non si legge come uno
+-- scritto a mano: sapere a colpo d'occhio quali righe non vengono da una
+-- persona cambia il modo in cui si scorre una cronologia.
+--
+-- Il riscontro avviene per parole intere, non per sottostringa: "claude" dentro
+-- "Claudel" o "bot" dentro "Abbott" sarebbero falsi positivi che marchiano una
+-- persona vera come macchina, ed e' l'errore piu' antipatico da fare qui.
+local AI_TOKENS = {
+  claude = true, anthropic = true, copilot = true, chatgpt = true,
+  openai = true, codex = true, cursor = true, devin = true, gemini = true,
+  codeium = true, tabnine = true, aider = true, sweep = true, codegen = true,
+  llm = true,
+  -- Volutamente NON c'e' il token "ai" da solo: e' un nome proprio diffuso
+  -- (Ai Nakamura) e marchiare una persona come macchina e' l'errore peggiore
+  -- che questa funzione possa fare. "Devin AI" viene riconosciuto lo stesso,
+  -- da "devin"; per i casi rimasti fuori c'e' la lista in setup().
+}
+local BOT_TOKENS = {
+  bot = true, bots = true, dependabot = true, renovate = true, greenkeeper = true,
+  snyk = true, imgbot = true, codecov = true, netlify = true, vercel = true,
+  travis = true, circleci = true, jenkins = true, precommit = true,
+  semanticrelease = true, mergify = true, allcontributors = true,
+  githubactions = true, precommitci = true,
+}
+
+--- @return string|nil "ai", "bot", oppure nil per una persona
+function M.classify_author(name)
+  local raw = tostring(name or "")
+  if raw == "" then return nil end
+
+  local extra = config.options.bots or {}
+  local ai_extra, bot_extra = {}, {}
+  for _, w in ipairs(extra.ai or {}) do ai_extra[tostring(w):lower()] = true end
+  for _, w in ipairs(extra.bot or {}) do bot_extra[tostring(w):lower()] = true end
+
+  -- "github-actions[bot]" -> github, actions, bot
+  local tokens = {}
+  for token in raw:lower():gmatch("[%a][%a%d]*") do
+    tokens[#tokens + 1] = token
+  end
+
+  local is_bot = false
+  local function look(word)
+    if AI_TOKENS[word] or ai_extra[word] then return "ai" end
+    if BOT_TOKENS[word] or bot_extra[word] then is_bot = true end
+  end
+
+  for i, token in ipairs(tokens) do
+    if look(token) == "ai" then return "ai" end
+    -- Anche la coppia adiacente, perche' diversi nomi arrivano gia' spezzati
+    -- dal separatore: "pre-commit ci" o "semantic-release-bot" vanno letti
+    -- come un termine solo, non come parole sciolte.
+    if tokens[i + 1] and look(token .. tokens[i + 1]) == "ai" then return "ai" end
+  end
+  -- L'AI ha la precedenza: un "claude[bot]" resta prima di tutto un assistente,
+  -- percio' il verdetto bot si emette solo dopo aver scandito il nome intero.
+  return is_bot and "bot" or nil
+end
+
 function M.has_gh_cache(path)
   local c = GH_CACHE[path]
   if c == false then return true end
@@ -1029,25 +1089,50 @@ function M.get_commit_details(path, limit, force)
             count = tonumber(count) or 0,
             is_owner = false,
             is_me = is_me,
+            kind = M.classify_author(c_name),
           }
         end
       end
 
       if #author_stats > 0 then
-        -- 1. Il contributor #1 (per numero di commit) è il creatore/proprietario principale
-        author_stats[1].is_owner = true
-        local top_clean = author_stats[1].name:lower():gsub("[%s%-_%.]", "")
-        owners_set[top_clean] = true
-
-        -- 2. Anche qualsiasi alias corrispondente al proprietario del repository
+        -- 1. Corona chi corrisponde al proprietario del remote, anche come
+        --    alias (es. l'autore "lama-development" su lama-development/BoardHub).
+        local matched_remote_owner = false
         if repo_owner_clean ~= "" then
           for _, ast in ipairs(author_stats) do
             local c_clean = ast.name:lower():gsub("[%s%-_%.]", "")
             if c_clean == repo_owner_clean or c_clean:find(repo_owner_clean, 1, true) or repo_owner_clean:find(c_clean, 1, true) then
               ast.is_owner = true
               owners_set[c_clean] = true
+              matched_remote_owner = true
             end
           end
+        end
+
+        -- 2. Se il repository è mio, la corona spetta anche ai miei alias
+        --    locali: git firma i commit con il nome esteso ("Andrea Perini")
+        --    mentre il remote porta il login ("phantumblade"), e sono la
+        --    stessa persona.
+        local matched_me = false
+        if is_my_repo then
+          for _, ast in ipairs(author_stats) do
+            if ast.is_me then
+              ast.is_owner = true
+              owners_set[ast.name:lower():gsub("[%s%-_%.]", "")] = true
+              matched_me = true
+            end
+          end
+        end
+
+        -- 3. Il contributor #1 vale come creatore SOLO in mancanza dei
+        --    riscontri sopra: organizzazione che non committa mai (es.
+        --    "LazyVim" vs il creatore "Folke Lemaitre") o repository senza
+        --    remote. Applicarlo sempre metterebbe la corona al collaboratore
+        --    più attivo anche sul repository di qualcun altro.
+        if not matched_remote_owner and not matched_me then
+          author_stats[1].is_owner = true
+          local top_clean = author_stats[1].name:lower():gsub("[%s%-_%.]", "")
+          owners_set[top_clean] = true
         end
       end
     end
@@ -1079,6 +1164,7 @@ function M.get_commit_details(path, limit, force)
             show_author = show_author,
             is_owner = a_is_owner,
             is_me = a_is_me,
+            kind = M.classify_author(a_trim),
           }
         end
       end
@@ -1091,6 +1177,392 @@ end
 
 function M.get_recent_commits(path, limit)
   return M.get_commit_details(path, limit)
+end
+
+--------------------------------------------------------------- commit in arrivo
+-- La dashboard legge soltanto il repository locale: finche' nessuno esegue un
+-- `git fetch`, i commit spinti dai collaboratori su origin restano invisibili e
+-- il pannello mostra in buona fede una versione vecchia del progetto. Qui un
+-- fetch di sfondo aggiorna i riferimenti remoti - senza mai toccare HEAD ne' il
+-- working tree - e ricava i commit che stanno davanti al punto di sincronia.
+--
+-- Il costo va tenuto basso, perche' questo gira mentre l'utente scorre e
+-- digita. Tre regole lo governano:
+--   1. i fetch scorrono a finestra, mai tutti insieme;
+--   2. chi non porta novita' viene interrogato sempre piu' di rado (backoff);
+--   3. i progetti affollati - quelli scaricati da altri - vengono seguiti da
+--      lontano e in silenzio, perche' non e' li' che si aspettano notizie.
+local INCOMING_CACHE = {}
+local FETCH_STATE = {}
+local WATCH_FILE = DATA_DIR .. "/incoming_watch.json"
+local WATCH_OVERRIDE = nil
+-- Quanti commit in arrivo sapevamo gia' di avere, l'ultima volta. Vive su disco
+-- perche' INCOMING_CACHE muore con Neovim: senza, ogni riapertura ripartiva da
+-- zero e riannunciava come nuovo tutto l'arretrato, ogni singola volta.
+local SEEN_FILE = DATA_DIR .. "/incoming_seen.json"
+local SEEN_COUNT = nil
+local seen_save_pending = false
+
+-- Quante volte di fila un repository puo' rispondere "niente di nuovo" prima
+-- che l'intervallo smetta di raddoppiare. 3 significa fino a 8 volte la base.
+local MAX_BACKOFF_STEPS = 3
+-- Un progetto affollato resta sorvegliato, ma da molto piu' lontano.
+local CROWDED_SLOWDOWN = 4
+-- Fetch contemporanei. Oltre questa soglia si mette in coda: l'obiettivo e'
+-- non far mai comparire una selva di processi git nel monitor di sistema.
+local MAX_PARALLEL_FETCH = 3
+
+local function incoming_opts()
+  local o = config.options.incoming or {}
+  return {
+    enabled = o.enabled ~= false,
+    -- Sotto il minuto si tratterebbe la rete come se fosse il disco: il fetch
+    -- costa una connessione per repository, non uno `stat`.
+    interval = math.max(60, tonumber(o.interval) or 300),
+    timeout = math.max(5, tonumber(o.timeout) or 15),
+    notify = o.notify ~= false,
+    max_authors = math.max(1, tonumber(o.notify_max_authors) or 5),
+  }
+end
+
+local function norm_path(path)
+  return (vim.fn.fnamemodify(path, ":p"):gsub("/$", ""))
+end
+
+local function load_seen()
+  if SEEN_COUNT then return SEEN_COUNT end
+  SEEN_COUNT = {}
+  if vim.fn.filereadable(SEEN_FILE) == 1 then
+    local ok, lines = pcall(vim.fn.readfile, SEEN_FILE)
+    if ok and lines and #lines > 0 then
+      local ok_json, data = pcall(vim.json.decode, table.concat(lines, "\n"))
+      if ok_json and type(data) == "table" then SEEN_COUNT = data end
+    end
+  end
+  return SEEN_COUNT
+end
+
+local function save_seen()
+  if seen_save_pending then return end
+  seen_save_pending = true
+  -- I fetch rientrano a raffica: una scrittura sola per raffica invece di una
+  -- per repository, come gia' fa la cache dei metadati GitHub.
+  vim.defer_fn(function()
+    seen_save_pending = false
+    local to_save = {}
+    for k, v in pairs(load_seen()) do
+      -- Zero e' l'assenza di notizie: non vale la pena ricordarlo, e tenerlo
+      -- farebbe crescere il file con ogni progetto mai aperto.
+      if type(v) == "number" and v > 0 then to_save[k] = v end
+    end
+    local encoded = (next(to_save) == nil) and "{}" or vim.json.encode(to_save)
+    pcall(vim.fn.writefile, { encoded }, SEEN_FILE)
+  end, 500)
+end
+
+------------------------------------------------- sorveglianza per progetto
+
+local function load_watch()
+  if WATCH_OVERRIDE then return WATCH_OVERRIDE end
+  WATCH_OVERRIDE = {}
+  if vim.fn.filereadable(WATCH_FILE) == 1 then
+    local ok, lines = pcall(vim.fn.readfile, WATCH_FILE)
+    if ok and lines and #lines > 0 then
+      local ok_json, data = pcall(vim.json.decode, table.concat(lines, "\n"))
+      if ok_json and type(data) == "table" then WATCH_OVERRIDE = data end
+    end
+  end
+  return WATCH_OVERRIDE
+end
+
+--- Scelta esplicita dell'utente per questo progetto, se l'ha espressa.
+--- @return boolean|nil true/false se e' stata forzata, nil se decide l'euristica
+function M.get_watch_override(path)
+  local v = load_watch()[norm_path(path)]
+  if v == nil then return nil end
+  return v and true or false
+end
+
+--- Quanti autori distinti ha il progetto. Il dato arriva gia' pronto da
+--- load_git (shortlog), quindi qui non si spawna niente.
+function M.author_count(item)
+  local n = 0
+  for _ in pairs((item and item.authors) or {}) do n = n + 1 end
+  return (n > 0) and n or 1
+end
+
+--- Un progetto e' "sorvegliato" quando merita notifiche e un ritmo serrato.
+--- L'euristica: pochi autori significa progetto tuo o di un piccolo gruppo, ed
+--- e' li' che un commit altrui e' una notizia. Molti autori significa quasi
+--- sempre un repository altrui che hai clonato, dove le notifiche sarebbero
+--- solo rumore. La scelta manuale, quando c'e', vince sempre.
+function M.is_watched(path, author_count)
+  local ov = M.get_watch_override(path)
+  if ov ~= nil then return ov end
+  return (author_count or 1) <= incoming_opts().max_authors
+end
+
+--- Inverte lo stato per questo progetto e lo registra su disco.
+--- @return boolean il nuovo stato
+function M.toggle_watch(path, author_count)
+  local now_watched = M.is_watched(path, author_count)
+  local want = not now_watched
+  local w = load_watch()
+  local key = norm_path(path)
+
+  -- Se la scelta manuale coincide con quello che l'euristica direbbe da sola,
+  -- si toglie l'eccezione invece di cristallizzarla: cosi' il progetto torna a
+  -- seguire la regola generale se un domani cambia numero di collaboratori.
+  if want == ((author_count or 1) <= incoming_opts().max_authors) then
+    w[key] = nil
+  else
+    w[key] = want
+  end
+
+  local to_save = {}
+  for k, v in pairs(w) do to_save[k] = v end
+  local encoded = (next(to_save) == nil) and "{}" or vim.json.encode(to_save)
+  pcall(vim.fn.writefile, { encoded }, WATCH_FILE)
+  return want
+end
+
+------------------------------------------------------------------ lettura
+
+--- Commit presenti su upstream e non ancora in locale.
+--- @return table|nil { commits = {...}, count = n, upstream = "origin/main" }
+function M.get_incoming(path)
+  local e = INCOMING_CACHE[path]
+  if e and e.count and e.count > 0 then return e end
+  return nil
+end
+
+function M.clear_incoming(path)
+  if path then
+    INCOMING_CACHE[path] = nil
+    FETCH_STATE[path] = nil
+  else
+    INCOMING_CACHE = {}
+    FETCH_STATE = {}
+  end
+end
+
+--- Dimentica l'arretrato gia' visto: il prossimo giro riannuncera' tutto.
+--- Serve solo per i test e per rimettere in bolla una situazione strana.
+function M.forget_seen()
+  SEEN_COUNT = {}
+  pcall(vim.fn.writefile, { "{}" }, SEEN_FILE)
+end
+
+--- Applica a una lista di commit gli stessi ruoli (corona / membro) gia'
+--- calcolati da get_commit_details, cosi' le righe in arrivo si leggono
+--- esattamente come quelle locali invece di apparire tutte anonime.
+function M.tag_commit_roles(path, list)
+  local ca = AUTHORS_CACHE[path]
+  if not ca then return list end
+  local multi = (ca.stats and #ca.stats > 1) or false
+  for _, c in ipairs(list) do
+    local clean = tostring(c.author or ""):lower():gsub("[%s%-_%.]", "")
+    c.is_owner = ca.owners[clean] or false
+    c.is_me = ca.me[clean] or false
+    c.kind = M.classify_author(c.author)
+    c.show_author = multi
+  end
+  return list
+end
+
+------------------------------------------------------------- aggiornamento
+
+--- Ogni buca consecutiva raddoppia l'attesa, fino al tetto: un repository che
+--- da mezz'ora non si muove non merita la stessa insistenza di uno attivo.
+local function effective_interval(base, state, watched)
+  local misses = math.min(state.misses or 0, MAX_BACKOFF_STEPS)
+  return base * (watched and 1 or CROWDED_SLOWDOWN) * (2 ^ misses)
+end
+
+--- Vale la pena interrogare la rete per questo repository, adesso?
+local function fetch_due(path, opts, watched)
+  local state = FETCH_STATE[path]
+  if not state then return true end
+  if state.running then return false end
+  -- `last == 0` significa "mai interrogato": la prima volta si passa sempre,
+  -- altrimenti su una macchina appena riavviata (uv.now() ancora sotto
+  -- l'intervallo) il primo fetch non partirebbe mai.
+  if (state.last or 0) <= 0 then return true end
+  local wait = effective_interval(opts.interval, state, watched) * 1000
+  return ((vim.uv or vim.loop).now() - state.last) >= wait
+end
+
+local function do_refresh(path, want_fetch, watched, on_change, on_finish)
+  local opts = incoming_opts()
+  local uv = vim.uv or vim.loop
+  local state = FETCH_STATE[path] or { last = 0, running = false, misses = 0 }
+
+  if state.running then
+    if on_finish then on_finish() end
+    return
+  end
+  state.running = true
+  FETCH_STATE[path] = state
+
+  local q = vim.fn.shellescape(path)
+  local steps = {}
+  if want_fetch then
+    -- --no-tags: aggiorna i rami gia' tracciati senza trascinarsi dietro
+    -- l'intero universo dei tag dei progetti grandi.
+    steps[#steps + 1] = "git -C " .. q .. " fetch --quiet --no-tags 2>/dev/null"
+  end
+  steps[#steps + 1] = 'printf "\\037UP %s\\n" "$(git -C ' .. q .. ' rev-parse --abbrev-ref @{u} 2>/dev/null)"'
+  steps[#steps + 1] = "git -C " .. q .. " log HEAD..@{u} --pretty=format:'%h|%cr|%an|%s' 2>/dev/null"
+  local script = table.concat(steps, "; ")
+
+  local out = {}
+  local job = nil
+  local finished = false
+
+  local function finish()
+    if finished then return end
+    finished = true
+
+    local upstream, commits = nil, {}
+    for _, line in ipairs(out) do
+      local up = line:match("^\031UP%s*(.*)$")
+      if up then
+        upstream = (vim.trim(up) ~= "") and vim.trim(up) or nil
+      else
+        local hash, age, author, subject = line:match("^([^|]+)|([^|]+)|([^|]+)|(.+)$")
+        if hash and age and subject then
+          commits[#commits + 1] = {
+            hash = hash,
+            age = age,
+            author = vim.trim(author),
+            subject = subject,
+            is_incoming = true,
+          }
+        end
+      end
+    end
+
+    local prev = INCOMING_CACHE[path]
+    -- Alla prima interrogazione di questa sessione il riferimento arriva dal
+    -- disco: cosi' l'arretrato gia' visto resta silenzioso e viene annunciato
+    -- solo cio' che e' comparso davvero da allora.
+    local seen = load_seen()
+    local key = norm_path(path)
+    local prev_count = (prev and prev.count) or seen[key] or 0
+    local st = FETCH_STATE[path] or {}
+    st.running = false
+    -- Il timestamp avanza solo dopo un vero giro di rete: un ricalcolo locale
+    -- non deve far slittare il fetch successivo.
+    if want_fetch then
+      st.last = uv.now()
+      st.misses = (#commits > prev_count) and 0 or ((st.misses or 0) + 1)
+    end
+    FETCH_STATE[path] = st
+
+    INCOMING_CACHE[path] = {
+      commits = commits,
+      count = #commits,
+      upstream = upstream or (prev and prev.upstream),
+      at = uv.now(),
+    }
+
+    if seen[key] ~= #commits then
+      seen[key] = #commits
+      save_seen()
+    end
+
+    -- Il silenzio vale per la notifica, non per il pannello: il divider deve
+    -- comparire comunque. Percio' si segnala ogni variazione, in aumento come
+    -- in diminuzione, e si dice a parte se merita di essere annunciata: legare
+    -- il ridisegno all'avviso faceva sparire la cronologia dai progetti muti.
+    if on_change and #commits ~= prev_count then
+      on_change(path, INCOMING_CACHE[path], #commits - prev_count, watched)
+    end
+    if on_finish then on_finish() end
+  end
+
+  -- Un repository privato via HTTPS senza credenziali in cache chiederebbe
+  -- utente e password su un terminale che non esiste, e il job resterebbe
+  -- appeso per sempre: qui ogni richiesta interattiva viene negata in partenza
+  -- e un timer chiude comunque la porta dopo `timeout` secondi.
+  job = vim.fn.jobstart({ "sh", "-c", script }, {
+    stdout_buffered = true,
+    env = {
+      GIT_TERMINAL_PROMPT = "0",
+      GIT_ASKPASS = "true",
+      SSH_ASKPASS = "true",
+      GIT_SSH_COMMAND = "ssh -oBatchMode=yes -oConnectTimeout=10",
+    },
+    on_stdout = function(_, data)
+      if data then out = data end
+    end,
+    on_stderr = function() end,
+    on_exit = function() vim.schedule(finish) end,
+  })
+
+  if not job or job <= 0 then
+    finish()
+    return
+  end
+
+  vim.defer_fn(function()
+    if not finished then
+      pcall(vim.fn.jobstop, job)
+      vim.schedule(finish)
+    end
+  end, opts.timeout * 1000)
+end
+
+--- Stato della sorveglianza per un repository: utile per capire perche' un
+--- progetto non si sta aggiornando quanto ci si aspetta.
+--- @return table { last, running, misses, interval } - interval in secondi
+function M.incoming_state(path, watched)
+  local state = FETCH_STATE[path] or { last = 0, running = false, misses = 0 }
+  return {
+    last = state.last or 0,
+    running = state.running or false,
+    misses = state.misses or 0,
+    interval = effective_interval(incoming_opts().interval, state, watched ~= false),
+  }
+end
+
+--- Ricalcolo puramente locale, senza rete: serve subito dopo un `git pull`,
+--- per far sparire il divider senza attendere il giro successivo.
+function M.recount_incoming(path, on_done)
+  if not incoming_opts().enabled then return end
+  if vim.fn.isdirectory(path .. "/.git") == 0 then return end
+  do_refresh(path, false, false, nil, on_done)
+end
+
+--- Passa in rassegna i progetti e aggiorna quelli scaduti, a finestra
+--- scorrevole. Puo' essere chiamata a ogni giro del timer: chi non e' scaduto
+--- non costa nulla, perche' la decisione e' un confronto fra numeri e non
+--- tocca ne' disco ne' rete.
+function M.refresh_incoming_all(items, on_change)
+  local opts = incoming_opts()
+  if not opts.enabled then return end
+
+  local queue = {}
+  for _, it in ipairs(items or {}) do
+    if it.git and not it.git.none and not it.is_missing and not it.is_disconnected then
+      local watched = M.is_watched(it.path, M.author_count(it))
+      if fetch_due(it.path, opts, watched) then
+        queue[#queue + 1] = { path = it.path, watched = watched }
+      end
+    end
+  end
+  if #queue == 0 then return end
+
+  local idx = 1
+  local function next_one()
+    if idx > #queue then return end
+    local job = queue[idx]
+    idx = idx + 1
+    -- `notify = false` spegne gli avvisi ovunque, ma il pannello continua a
+    -- ricevere i dati: e' un interruttore sulle notifiche, non sulla funzione.
+    do_refresh(job.path, true, job.watched and opts.notify, on_change, next_one)
+  end
+  for _ = 1, math.min(MAX_PARALLEL_FETCH, #queue) do next_one() end
 end
 
 local function parse_git_remote(origin_url)
