@@ -118,69 +118,16 @@ local LANG_TOKENS = {
   node = { name = "Node", hl = "ProjectsPillJS" },
 }
 
--- Distintivo del tipo di progetto: al posto della parola, il marchio.
---
--- Solo il colore, mai un fondo: il distintivo deve staccarsi dalla card senza
--- diventare un secondo riquadro dentro un riquadro, percio' i gruppi usati sono
--- quelli della tabella senza sfondo. La famiglia e' Material (md-language_*),
--- l'unica che copre quasi tutti i linguaggi con lo stesso tratto; dove manca
--- si ripiega su devicons, e Node tiene il suo esagono Font Awesome.
-local BADGES = {
-  android = { "\u{f0032}", "ProjectsLangAndroid" },   -- nf-md-android
-  ios = { "\u{f0037}", "ProjectsLangApple" },         -- nf-md-apple_ios
-  go = { "\u{f07d3}", "ProjectsLangGo" },             -- nf-md-language_go
-  node = { "\u{ed0d}", "ProjectsLangNode" },          -- nf-fa-node_js
-  python = { "\u{f0320}", "ProjectsLangPython" },
-  java = { "\u{f0b37}", "ProjectsLangJava" },
-  kotlin = { "\u{f1219}", "ProjectsLangKotlin" },
-  rust = { "\u{f1617}", "ProjectsLangRust" },
-  swift = { "\u{f06e5}", "ProjectsLangSwift" },
-  typescript = { "\u{f06e6}", "ProjectsLangTS" },
-  javascript = { "\u{f031e}", "ProjectsLangJS" },
-  php = { "\u{f031f}", "ProjectsLangPHP" },
-  ruby = { "\u{f0d2d}", "ProjectsLangRuby" },
-  lua = { "\u{f08b1}", "ProjectsLangLua" },
-  web = { "\u{f031d}", "ProjectsLangHTML" },
-  html = { "\u{f031d}", "ProjectsLangHTML" },
-  css = { "\u{f031c}", "ProjectsLangCSS" },
-  c = { "\u{f0671}", "ProjectsLangC" },
-  ["c++"] = { "\u{f0672}", "ProjectsLangCPP" },
-  ["c#"] = { "\u{f031b}", "ProjectsLangCSharp" },
-  markdown = { "\u{f0354}", "ProjectsLangMarkdown" },
-  docker = { "\u{f0868}", "ProjectsLangDocker" },
-  nix = { "\u{f1105}", "ProjectsLangNix" },
-  vue = { "\u{f0844}", "ProjectsLangVue" },
-  -- Fuori dalla famiglia Material, che qui non arriva
-  flutter = { "\u{e7dd}", "ProjectsLangFlutter" },
-  dart = { "\u{e798}", "ProjectsLangDart" },
-  gradle = { "\u{e7f2}", "ProjectsLangGradle" },
-  elixir = { "\u{e7cd}", "ProjectsLangElixir" },
-  terraform = { "\u{e8bd}", "ProjectsLangTerraform" },
-  zig = { "\u{e6a9}", "ProjectsLangZig" },
-  svelte = { "\u{e8b7}", "ProjectsLangSvelte" },
-  astro = { "\u{e735}", "ProjectsLangAstro" },
-  sql = { "\u{e706}", "ProjectsLangSQL" },
-  shell = { "\u{e691}", "ProjectsLangShell" },
-}
-
---- Distintivo da mostrare per un progetto: prima il tipo dedotto dai file di
---- build, che e' il dato piu' preciso; in mancanza, il linguaggio dominante,
---- che per un progetto di soli appunti o senza file indicatori e' comunque
---- meglio di un badge vuoto.
---- @return string|nil icona, string gruppo di evidenziazione
-local function type_badge(p)
-  local key = p.type and p.type:lower() or nil
-  local b = key and BADGES[key]
-  if b then return b[1], b[2] end
-  -- Il tipo c'e' ma non ha un marchio: meglio la parola che niente.
-  if p.type then return nil, "ProjectsType" end
-
+--- Etichetta del tipo di progetto. Il tipo dedotto dai file di build e' il
+--- dato piu' preciso; quando non c'e' - una cartella di appunti, un insieme di
+--- esercizi senza file indicatori - si ripiega sul linguaggio dominante, che la
+--- barra dei linguaggi ha gia' calcolato e che vale comunque piu' di un badge
+--- vuoto. Il colore resta uno solo per tutti: e' un'etichetta, non un semaforo.
+--- @return string|nil
+local function type_label(p)
+  if p.type then return p.type end
   local top = p.languages and p.languages[1]
-  if top and top.name then
-    local lb = BADGES[top.name:lower()]
-    if lb then return lb[1], lb[2] end
-  end
-  return nil, "ProjectsType"
+  return (top and top.name) or nil
 end
 
 local render_list, render_preview, render_scrollbar, render_preview_scrollbar
@@ -288,19 +235,6 @@ local function set_hl()
     ProjectsLangZig = { fg = "#EC915C", bold = true, undercurl = false, sp = nil },
     ProjectsLangMarkdown = { fg = "#61AFEF", bold = true, undercurl = false, sp = nil },
     ProjectsLangShell = { fg = "#2ECC71", bold = true, undercurl = false, sp = nil },
-
-    -- Piattaforme che non sono un linguaggio ma un ecosistema. Stanno qui, e
-    -- non fra le pillole, perche' il distintivo del tipo e' solo il marchio
-    -- colorato: niente fondo dietro, come per tutti i colori di questa tabella.
-    ProjectsLangAndroid = { fg = "#3DDC84", bold = true, undercurl = false, sp = nil },
-    ProjectsLangApple = { fg = "#D6D9DC", bold = true, undercurl = false, sp = nil },
-    ProjectsLangNode = { fg = "#83CD29", bold = true, undercurl = false, sp = nil },
-    ProjectsLangGradle = { fg = "#02B5C3", bold = true, undercurl = false, sp = nil },
-    ProjectsLangFlutter = { fg = "#47C5FB", bold = true, undercurl = false, sp = nil },
-    ProjectsLangDocker = { fg = "#2496ED", bold = true, undercurl = false, sp = nil },
-    ProjectsLangNix = { fg = "#7EBAE4", bold = true, undercurl = false, sp = nil },
-    ProjectsLangTerraform = { fg = "#A067F5", bold = true, undercurl = false, sp = nil },
-    ProjectsLangElixir = { fg = "#A06CC4", bold = true, undercurl = false, sp = nil },
     ProjectsLangTrack = { fg = "#282C34" },
 
     -- Palette per i badge della barra di ricerca (SFONDO PILLOLA TENUE)
@@ -867,17 +801,8 @@ local function card(p, w, sel, st)
     ptype = " 󱊞 " .. (p.volume_name or i18n.t("badge_external_online")) .. " "
     ptype_hl = "ProjectsType"
   else
-    -- Il marchio dice la stessa cosa della parola in un terzo dello spazio, e
-    -- il colore la dice ancora prima che l'occhio arrivi a leggerlo. Se il tipo
-    -- non ha un marchio si ripiega sulla parola, come prima.
-    local icon, hl = type_badge(p)
-    if icon then
-      ptype = " " .. icon .. " "
-      ptype_hl = hl
-    elseif p.type then
-      ptype = " " .. p.type .. " "
-      ptype_hl = hl
-    end
+    local label = type_label(p)
+    if label then ptype = " " .. label .. " " end
   end
 
   local name_icon = p.is_disconnected and "󱊞 " or ""

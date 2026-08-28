@@ -311,15 +311,9 @@ require("projecthub").setup({
 
 ## Project type badges
 
-The type badge on a card is the ecosystem's own mark rather than its name - a green robot for Android, the gopher for Go, the hexagon for Node - in the brand's colour. It says the same thing as the word in a third of the space, and the colour lands before the eye has finished reading.
+The badge on a card names the project's ecosystem, in one colour for all of them: it is a label, not a signal, and giving each type its own hue turned a wall of cards into a wall of confetti.
 
-Colour only, never a filled ground: the badge has to stand out from the card without becoming a second box inside a box, so it uses the no-background highlight groups the language bar already uses.
-
-Glyphs are Material (`nf-md-language_*`), the one family that covers nearly every language with a single stroke; where it does not reach, devicons fills in, and Node keeps its Font Awesome hexagon.
-
-Detection reads the build file first, because that is the precise signal - `pubspec.yaml` means Flutter, `go.mod` means Go, `pom.xml` means Java - and the order runs from specific to general, so a `Dockerfile` only speaks when nothing else does. When a project has no build file at all - a notes repository, a folder of exercises - the badge falls back to the dominant language already computed for the language bar, which beats an empty badge. A type with no mark of its own still shows its name, exactly as before.
-
-After you pull, the divider disappears on the next refresh — the recount is local, so it does not wait for the following fetch. A repository without a remote, without an upstream branch, or whose fetch fails is simply left alone: nothing is invented, and a fetch that hangs on a credential prompt is abandoned after `timeout` seconds.
+Detection reads the build file first, because that is the precise answer - `pubspec.yaml` means Flutter, `go.mod` means Go, `pom.xml` means Java - and the order runs from specific to general, so a `Dockerfile` only speaks when nothing else does. When a project has no build file at all - a notes repository, a folder of exercises - the badge falls back to the dominant language already computed for the language bar, which costs nothing and beats an empty badge.
 
 ---
 
