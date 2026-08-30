@@ -1479,7 +1479,9 @@ local function fetch_due(path, opts, watched)
   return ((vim.uv or vim.loop).now() - state.last) >= wait
 end
 
-local function do_refresh(path, want_fetch, watched, on_change, on_finish)
+--- @param authors number|nil quanti autori ha il progetto: serve a ricalcolare
+---        la sorveglianza al momento giusto, non a quello sbagliato.
+local function do_refresh(path, want_fetch, authors, on_change, on_finish)
   local opts = incoming_opts()
   local uv = vim.uv or vim.loop
   local state = FETCH_STATE[path] or { last = 0, running = false, misses = 0 }
@@ -1562,8 +1564,14 @@ local function do_refresh(path, want_fetch, watched, on_change, on_finish)
     -- comparire comunque. Percio' si segnala ogni variazione, in aumento come
     -- in diminuzione, e si dice a parte se merita di essere annunciata: legare
     -- il ridisegno all'avviso faceva sparire la cronologia dai progetti muti.
+    --
+    -- La sorveglianza si rilegge adesso, non quando il fetch e' stato messo in
+    -- coda: fra le due cose passa una richiesta di rete, e chi preme `b` in
+    -- quel momento si aspetta che valga per l'avviso che sta per arrivare, non
+    -- solo per il prossimo giro.
+    local notifiable = M.is_watched(path, authors) and incoming_opts().notify
     if on_change and #commits ~= prev_count then
-      on_change(path, INCOMING_CACHE[path], #commits - prev_count, watched)
+      on_change(path, INCOMING_CACHE[path], #commits - prev_count, notifiable)
     end
     if on_finish then on_finish() end
   end
@@ -1618,7 +1626,7 @@ end
 function M.recount_incoming(path, on_done)
   if not incoming_opts().enabled then return end
   if vim.fn.isdirectory(path .. "/.git") == 0 then return end
-  do_refresh(path, false, false, nil, on_done)
+  do_refresh(path, false, nil, nil, on_done)
 end
 
 --- Passa in rassegna i progetti e aggiorna quelli scaduti, a finestra
@@ -1632,9 +1640,11 @@ function M.refresh_incoming_all(items, on_change)
   local queue = {}
   for _, it in ipairs(items or {}) do
     if it.git and not it.git.none and not it.is_missing and not it.is_disconnected then
-      local watched = M.is_watched(it.path, M.author_count(it))
-      if fetch_due(it.path, opts, watched) then
-        queue[#queue + 1] = { path = it.path, watched = watched }
+      local authors = M.author_count(it)
+      -- Qui la sorveglianza serve solo a decidere ogni quanto interrogare la
+      -- rete; se meriti un avviso lo si ridecide a risposta arrivata.
+      if fetch_due(it.path, opts, M.is_watched(it.path, authors)) then
+        queue[#queue + 1] = { path = it.path, authors = authors }
       end
     end
   end
@@ -1645,9 +1655,7 @@ function M.refresh_incoming_all(items, on_change)
     if idx > #queue then return end
     local job = queue[idx]
     idx = idx + 1
-    -- `notify = false` spegne gli avvisi ovunque, ma il pannello continua a
-    -- ricevere i dati: e' un interruttore sulle notifiche, non sulla funzione.
-    do_refresh(job.path, true, job.watched and opts.notify, on_change, next_one)
+    do_refresh(job.path, true, job.authors, on_change, next_one)
   end
   for _ = 1, math.min(MAX_PARALLEL_FETCH, #queue) do next_one() end
 end
