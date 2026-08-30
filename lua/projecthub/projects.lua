@@ -1061,13 +1061,38 @@ function M.classify_author(name)
   return is_bot and "bot" or nil
 end
 
+--- Ogni quanto tornare a chiedere a GitHub stelle, fork e visibilita'.
+local function gh_ttl()
+  return math.max(60, tonumber((config.options.github or {}).refresh) or 1800)
+end
+
+--- I metadati in cache sono ancora buoni, o vanno richiesti di nuovo?
+---
+--- Prima bastava che esistessero: una volta scaricato, il numero di stelle
+--- restava quello per sempre, anche riaprendo Neovim, perche' niente lo
+--- dichiarava mai vecchio. Un repository che passava da 1 a 4 stelle continuava
+--- a mostrarne 1 finche' qualcuno non cancellava il file a mano.
 function M.has_gh_cache(path)
   local c = GH_CACHE[path]
   if c == false then return true end
   if type(c) == "table" then
-    return not c.is_fallback
+    if c.is_fallback then return false end
+    -- Le voci scritte da versioni precedenti non hanno la data: valgono come
+    -- scadute, cosi' si aggiornano da sole al primo avvio.
+    local at = tonumber(c.fetched_at) or 0
+    if at <= 0 then return false end
+    return (os.time() - at) < gh_ttl()
   end
   return false
+end
+
+--- Dichiara vecchio tutto quello che c'e', senza buttarlo: il pannello continua
+--- a mostrare i numeri di prima mentre quelli nuovi arrivano, invece di
+--- svuotarsi e riempirsi. Serve al refresh manuale.
+function M.expire_gh_cache()
+  for _, v in pairs(GH_CACHE) do
+    if type(v) == "table" then v.fetched_at = 0 end
+  end
 end
 
 function M.get_commit_details(path, limit, force)
@@ -1819,6 +1844,7 @@ function M.async_load_github_meta(path, callback, force)
                   forge = "github",
                   web_url = r.web_url,
                   is_fallback = false,
+                  fetched_at = os.time(),
                 }
                 GH_CACHE[path] = res
                 save_gh_cache_to_disk()
@@ -1859,6 +1885,7 @@ function M.async_load_github_meta(path, callback, force)
           forge = r.forge,
           web_url = r.web_url,
           is_fallback = false,
+          fetched_at = os.time(),
         }
         GH_CACHE[path] = res
         save_gh_cache_to_disk()

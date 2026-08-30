@@ -3792,7 +3792,14 @@ function M.open()
   map(all_bufs, { "i", "n" }, { "<C-f>" }, function() scroll_preview(st, 10) end)
   map(all_bufs, { "i", "n" }, { "<C-b>" }, function() scroll_preview(st, -10) end)
   map(all_bufs, { "i", "n" }, { "<C-r>" }, function()
-    P.load_git(st.all, function() render_list(st) end, true)
+    -- Il refresh manuale vale anche per i dati che arrivano da GitHub: se si
+    -- preme Ctrl-r e' proprio perche' si sospetta che qualcosa sia cambiato,
+    -- e stelle e fork sono la cosa che cambia senza toccare il disco.
+    P.expire_gh_cache()
+    P.load_git(st.all, function()
+      render_list(st)
+      if (st.view_mode or "inspector") == "inspector" then render_preview(st) end
+    end, true)
   end)
 
   map(all_bufs, "n", { "s" }, function()

@@ -96,6 +96,15 @@ M.defaults = {
     volume = 0.40,  -- volume morbido e bilanciato da 0.0 a 1.0
   },
 
+  -- Ogni quanto tornare a chiedere a GitHub stelle, fork e visibilita' di un
+  -- repository gia' noto. Senza scadenza il numero di stelle resterebbe quello
+  -- del primo prelievo per sempre; con una scadenza troppo corta si spenderebbe
+  -- una chiamata API per aprire il pannello. Mezz'ora e' il compromesso: i
+  -- numeri si muovono lentamente, e Ctrl-r li aggiorna subito quando serve.
+  github = {
+    refresh = 1800, -- secondi (minimo 60)
+  },
+
   -- Sorveglianza delle stelle sui tuoi repository GitHub. Richiede la CLI `gh`
   -- autenticata (`gh auth login`). Quando uno dei tuoi repo riceve una stella
   -- compare un riquadro in alto a destra accompagnato dal suono "achievement".
