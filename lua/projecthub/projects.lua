@@ -942,6 +942,8 @@ end
 
 local GH_META_FILE = DATA_DIR .. "/github_meta.json"
 local GH_CACHE = {}
+-- Percorsi per cui una richiesta e' gia' partita e non e' ancora tornata.
+local GH_INFLIGHT = {}
 
 local function load_gh_cache_from_disk()
   if vim.fn.filereadable(GH_META_FILE) == 0 then return {} end
@@ -1061,6 +1063,9 @@ function M.classify_author(name)
   return is_bot and "bot" or nil
 end
 
+-- Quanto aspettare prima di riprovare un prelievo fallito.
+local GH_FALLBACK_TTL = 300
+
 --- Ogni quanto tornare a chiedere a GitHub stelle, fork e visibilita'.
 local function gh_ttl()
   return math.max(60, tonumber((config.options.github or {}).refresh) or 1800)
@@ -1076,12 +1081,16 @@ function M.has_gh_cache(path)
   local c = GH_CACHE[path]
   if c == false then return true end
   if type(c) == "table" then
-    if c.is_fallback then return false end
     -- Le voci scritte da versioni precedenti non hanno la data: valgono come
     -- scadute, cosi' si aggiornano da sole al primo avvio.
     local at = tonumber(c.fetched_at) or 0
     if at <= 0 then return false end
-    return (os.time() - at) < gh_ttl()
+    -- Un tentativo andato male vale comunque come risposta per un po'. Prima
+    -- valeva zero, e un repository che GitHub non sa raccontare - rete giu',
+    -- `gh` non autenticato, remote privato - veniva richiesto a ogni singolo
+    -- ridisegno, per sempre.
+    local ttl = c.is_fallback and GH_FALLBACK_TTL or gh_ttl()
+    return (os.time() - at) < ttl
   end
   return false
 end
@@ -1759,6 +1768,7 @@ function M.get_github_meta(path)
             web_url = r.web_url,
             visibility = is_priv and "PRIVATE" or "PUBLIC",
             is_fallback = true,
+            fetched_at = os.time(),
           }
           GH_CACHE[path] = meta
           return meta
@@ -1778,12 +1788,24 @@ end
 --- fare: chi accoda le richieste ha bisogno di sapere quando liberare lo slot,
 --- altrimenti la coda si ferma a meta'.
 function M.async_load_github_meta(path, callback, force)
+  -- Una richiesta per volta e per progetto. Senza questa guardia bastava che
+  -- il pannello ridisegnasse dentro la propria callback - cosa che fa - perche'
+  -- ogni ridisegno chiedesse di nuovo i metadati e ne spawnasse altri due
+  -- processi: una ricorsione che finiva per esaurire i descrittori di file
+  -- dell'intero Neovim ("too many open files"), non solo di questo plugin.
+  if GH_INFLIGHT[path] then
+    if callback then vim.schedule(callback) end
+    return
+  end
+
   local finished = false
   local function done()
     if finished then return end
     finished = true
+    GH_INFLIGHT[path] = nil
     if callback then vim.schedule(callback) end
   end
+  GH_INFLIGHT[path] = true
 
   if not force and M.has_gh_cache(path) then
     local cached = GH_CACHE[path]
@@ -1873,6 +1895,7 @@ function M.async_load_github_meta(path, callback, force)
               forge = "github",
               web_url = r.web_url,
               is_fallback = true,
+              fetched_at = os.time(),
             }
             GH_CACHE[path] = fallback
             save_gh_cache_to_disk()
