@@ -13,6 +13,31 @@ setmetatable(M, {
   end,
 })
 
+-- Quanto in profondita' scendere in un albero di cartelle. Nessun progetto
+-- vero e' annidato cosi', ma un collegamento simbolico messo male o un albero
+-- generato lo sono: senza un tetto la ricorsione scende finche' non finisce lo
+-- stack, e si porta dietro tutto Neovim.
+local MAX_SCAN_DEPTH = 24
+
+-- Le due scansioni girano sotto pcall, perche' un permesso negato o una
+-- cartella che sparisce a meta' non devono far saltare tutto il giro. Ma un
+-- pcall muto e' peggio del problema che risolve: un errore di programmazione
+-- - una costante non ancora dichiarata al punto in cui la si usa - si presenta
+-- all'utente come barre dei linguaggi vuote, senza una riga che spieghi
+-- perche'. Il primo fallimento di ogni tipo si dice, una volta sola per
+-- sessione: abbastanza per accorgersene, non abbastanza per infastidire.
+local scan_failure_reported = {}
+local function report_scan_failure(kind, path, ok, err)
+  if ok or scan_failure_reported[kind] then return end
+  scan_failure_reported[kind] = true
+  vim.schedule(function()
+    vim.notify(
+      ("ProjectHub: scansione %s fallita su %s\n%s"):format(kind, tostring(path), tostring(err)),
+      vim.log.levels.WARN
+    )
+  end)
+end
+
 local DATA_DIR = vim.fn.stdpath("data") .. "/projecthub"
 vim.fn.mkdir(DATA_DIR, "p")
 
@@ -486,7 +511,8 @@ function M.load_languages(items, on_update, force)
       end
     end
 
-    pcall(scan, item.path, 0)
+    local ok_scan, err_scan = pcall(scan, item.path, 0)
+    report_scan_failure("linguaggi", item.path, ok_scan, err_scan)
 
     local list = {}
     if total_code_bytes > 0 then
@@ -1993,11 +2019,6 @@ local BINARY_EXTS = {
   jar = true, aar = true, apk = true, swp = true, db = true, sqlite = true,
 }
 
--- Quanto in profondita' scendere in un albero di cartelle. Nessun progetto
--- vero e' annidato cosi', ma un collegamento simbolico messo male o un albero
--- generato lo sono: senza un tetto la ricorsione scende finche' non finisce lo
--- stack, e si porta dietro tutto Neovim.
-local MAX_SCAN_DEPTH = 24
 -- Oltre questa soglia un file non viene aperto per contarne le righe. readfile
 -- carica tutto in memoria: un dump SQL o un log da mezzo giga bloccherebbe
 -- l'editor per il tempo che serve a leggerlo, e il conteggio righe non vale
@@ -2053,7 +2074,8 @@ function M.calc_loc_async(item, on_done)
       end
     end
 
-    local ok_scan = pcall(scan, path, 0)
+    local ok_scan, err_scan = pcall(scan, path, 0)
+    report_scan_failure("righe di codice", path, ok_scan, err_scan)
     LOC_INFLIGHT[path] = nil
     -- Anche se la scansione e' andata storta il risultato si scrive comunque:
     -- lasciare i campi vuoti farebbe richiedere il conteggio a ogni ridisegno,
