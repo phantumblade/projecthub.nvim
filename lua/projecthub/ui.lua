@@ -4566,15 +4566,22 @@ function M.open()
       return
     end
     st.marquee_offset = st.marquee_offset + 1
+
+    -- Il battito non deve poter diventare una sorgente di errori a ripetizione.
+    -- Qualunque cosa fallisca qui dentro - una finestra sparita sotto le mani,
+    -- un progetto rimosso a meta' giro - fallirebbe di nuovo mezzo secondo
+    -- dopo, e l'utente si troverebbe lo schermo pieno di messaggi identici
+    -- senza un modo ovvio per fermarli. Un giro saltato non si nota; una
+    -- valanga di errori si'.
     if st.list and vim.api.nvim_win_is_valid(st.list.win) and vim.api.nvim_buf_is_valid(st.list.buf) then
-      render_list(st, true)
+      pcall(render_list, st, true)
     end
 
-    check_drives()
+    pcall(check_drives)
 
     live_git_tick = live_git_tick + 1
     if live_git_tick % 10 == 0 then
-      live_refresh_git()
+      pcall(live_refresh_git)
     end
   end))
 

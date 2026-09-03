@@ -347,7 +347,9 @@ function M.start(silent)
 
   local interval = math.max(30, tonumber(opts().interval) or 120) * 1000
   timer = uv.new_timer()
-  timer:start(2000, interval, vim.schedule_wrap(function() M.check() end))
+  -- Anche qui il giro e' periodico: un errore non protetto tornerebbe identico
+  -- a ogni intervallo finche' la sorveglianza non viene spenta a mano.
+  timer:start(2000, interval, vim.schedule_wrap(function() pcall(M.check) end))
 
   if not silent then
     notify.notify(

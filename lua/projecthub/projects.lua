@@ -452,7 +452,10 @@ function M.load_languages(items, on_update, force)
     local total_code_bytes = 0
     local md_bytes = 0
 
-    local function scan(dir)
+    -- Stesso tetto alla profondita' del conteggio righe: un albero patologico
+    -- non deve poter esaurire lo stack.
+    local function scan(dir, depth)
+      if depth > MAX_SCAN_DEPTH then return end
       local ok, handle = pcall(vim.uv.fs_scandir, dir)
       if not ok or not handle then return end
       while true do
@@ -477,13 +480,13 @@ function M.load_languages(items, on_update, force)
               end
             end
           elseif t == "directory" then
-            scan(full)
+            scan(full, depth + 1)
           end
         end
       end
     end
 
-    scan(item.path)
+    pcall(scan, item.path, 0)
 
     local list = {}
     if total_code_bytes > 0 then
@@ -1983,6 +1986,22 @@ local BINARY_EXTS = {
   jar = true, aar = true, apk = true, swp = true, db = true, sqlite = true,
 }
 
+-- Quanto in profondita' scendere in un albero di cartelle. Nessun progetto
+-- vero e' annidato cosi', ma un collegamento simbolico messo male o un albero
+-- generato lo sono: senza un tetto la ricorsione scende finche' non finisce lo
+-- stack, e si porta dietro tutto Neovim.
+local MAX_SCAN_DEPTH = 24
+-- Oltre questa soglia un file non viene aperto per contarne le righe. readfile
+-- carica tutto in memoria: un dump SQL o un log da mezzo giga bloccherebbe
+-- l'editor per il tempo che serve a leggerlo, e il conteggio righe non vale
+-- quel prezzo.
+local MAX_LOC_FILE_BYTES = 2 * 1024 * 1024
+
+-- Conteggi gia' in corso, per percorso. Senza, ogni ridisegno del pannello
+-- avviava un'altra scansione completa dello stesso progetto: sono sincrone, si
+-- accodano, e su un albero grande si sentono tutte.
+local LOC_INFLIGHT = {}
+
 function M.calc_loc_async(item, on_done)
   if not item then return end
   if item.loc_lines and item.loc_files then
@@ -1990,12 +2009,17 @@ function M.calc_loc_async(item, on_done)
     return
   end
 
+  local path = item.path
+  if not path or path == "" then return end
+  if LOC_INFLIGHT[path] then return end
+  LOC_INFLIGHT[path] = true
+
   local total_lines = 0
   local file_count = 0
-  local path = item.path
 
   vim.defer_fn(function()
-    local function scan(dir)
+    local function scan(dir, depth)
+      if depth > MAX_SCAN_DEPTH then return end
       local ok, handle = pcall(vim.uv.fs_scandir, dir)
       if not ok or not handle then return end
       while true do
@@ -2006,59 +2030,35 @@ function M.calc_loc_async(item, on_done)
           if t == "file" then
             local ext = name:match("%.([^%.]+)$")
             if not (ext and BINARY_EXTS[ext:lower()]) then
-              local ok_f, f_lines = pcall(vim.fn.readfile, full)
-              if ok_f and f_lines then
-                total_lines = total_lines + #f_lines
-                file_count = file_count + 1
+              local st = vim.uv.fs_stat(full)
+              if st and (st.size or 0) <= MAX_LOC_FILE_BYTES then
+                local ok_f, f_lines = pcall(vim.fn.readfile, full)
+                if ok_f and f_lines then
+                  total_lines = total_lines + #f_lines
+                  file_count = file_count + 1
+                end
               end
             end
           elseif t == "directory" then
-            scan(full)
+            scan(full, depth + 1)
           end
         end
       end
     end
 
-    scan(path)
-    item.loc_lines = total_lines
-    item.loc_files = file_count
+    local ok_scan = pcall(scan, path, 0)
+    LOC_INFLIGHT[path] = nil
+    -- Anche se la scansione e' andata storta il risultato si scrive comunque:
+    -- lasciare i campi vuoti farebbe richiedere il conteggio a ogni ridisegno,
+    -- all'infinito, che e' esattamente il ciclo da cui questa guardia protegge.
+    item.loc_lines = ok_scan and total_lines or 0
+    item.loc_files = ok_scan and file_count or 0
     if on_done then
-      vim.schedule(function() on_done(total_lines, file_count) end)
+      vim.schedule(function() on_done(item.loc_lines, item.loc_files) end)
     end
   end, 1)
 end
 
-function M.calc_loc(path)
-  local total_lines = 0
-  local file_count = 0
-
-  local function scan(dir)
-    local ok, handle = pcall(vim.uv.fs_scandir, dir)
-    if not ok or not handle then return end
-    while true do
-      local name, t = vim.uv.fs_scandir_next(handle)
-      if not name then break end
-      if not M.is_ignored(name) then
-        local full = dir .. "/" .. name
-        if t == "file" then
-          local ext = name:match("%.([^%.]+)$")
-          if not (ext and BINARY_EXTS[ext:lower()]) then
-            local ok_f, f_lines = pcall(vim.fn.readfile, full)
-            if ok_f and f_lines then
-              total_lines = total_lines + #f_lines
-              file_count = file_count + 1
-            end
-          end
-        elseif t == "directory" then
-          scan(full)
-        end
-      end
-    end
-  end
-
-  scan(path)
-  return total_lines, file_count
-end
 
 function M.open(path)
   M.add_recent(path)
