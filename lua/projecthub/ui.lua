@@ -4582,16 +4582,31 @@ function M.open()
 
     pcall(check_drives)
 
-    -- Rileggere git per ogni progetto ogni cinque secondi costava, sui
-    -- cinquantasette progetti di una installazione reale, oltre mille comandi
-    -- git al minuto per tenere aggiornate le sei schede che si vedono. Il
-    -- progetto selezionato - quello di cui il pannello mostra righe, commit e
-    -- autori, dove una cifra vecchia si nota - resta a cinque secondi; per
-    -- tutti gli altri basta un giro completo ogni mezzo minuto, oltre a quelli
-    -- che scattano gia' quando torni sulla finestra o salvi un file.
+    -- Il ritmo segue quanto un progetto e' vivo. Su una installazione reale
+    -- quattro progetti su trentuno erano stati toccati nell'ultima settimana e
+    -- ventuno erano fermi da oltre un mese: rileggere git per tutti allo stesso
+    -- ritmo significava lavorare quasi solo su cartelle che non cambiavano.
+    --
+    -- Il progetto selezionato resta sempre a cinque secondi, qualunque sia la
+    -- sua eta': se lo stai guardando lo vuoi vivo. I dormienti non hanno un
+    -- ritmo proprio, ma vengono comunque aggiornati quando torni sulla
+    -- finestra, quando salvi un file e quando li selezioni.
+    local function by_tier(...)
+      local voluti, fuori = {}, {}
+      for _, t in ipairs({ ... }) do voluti[t] = true end
+      for _, it in ipairs(st.all) do
+        if voluti[P.activity_tier(it)] then fuori[#fuori + 1] = it end
+      end
+      return fuori
+    end
+
     live_git_tick = live_git_tick + 1
-    if live_git_tick % 60 == 0 then
-      pcall(live_refresh_git)
+    local warm_every = math.max(60, tonumber((config.options.polling or {}).warm_interval) or 300)
+
+    if live_git_tick % (warm_every * 2) == 0 then
+      pcall(live_refresh_git, by_tier("attivo", "tiepido"))
+    elseif live_git_tick % 60 == 0 then
+      pcall(live_refresh_git, by_tier("attivo"))
     elseif live_git_tick % 10 == 0 then
       local sel = st.items and st.items[st.sel]
       pcall(live_refresh_git, sel and { sel } or nil)

@@ -96,6 +96,23 @@ M.defaults = {
     volume = 0.40,  -- volume morbido e bilanciato da 0.0 a 1.0
   },
 
+  -- Con che frequenza rileggere git per i progetti che non stai guardando.
+  -- Un progetto fermo da mesi non cambia mentre la dashboard e' aperta, e
+  -- rileggerlo ogni mezzo minuto insieme a tutti gli altri era il grosso del
+  -- lavoro che il plugin faceva a vuoto. L'eta' si misura sul segnale piu'
+  -- recente fra ultimo commit e ultima modifica ai file.
+  --
+  -- Qualunque sia la fascia, restano immediati: il progetto selezionato (ogni
+  -- 5 secondi, e' quello che stai leggendo), il ritorno sulla finestra e il
+  -- salvataggio di un file, che aggiornano tutto.
+  polling = {
+    active_days = 7,   -- fino a qui: giro completo ogni 30 secondi
+    warm_days = 30,    -- fino a qui: giro completo ogni 5 minuti
+                       -- oltre: solo all'apertura, al ritorno sulla finestra
+                       --        o quando lo selezioni
+    warm_interval = 300, -- secondi fra due giri della fascia intermedia
+  },
+
   -- Ogni quanto tornare a chiedere a GitHub stelle, fork e visibilita' di un
   -- repository gia' noto. Senza scadenza il numero di stelle resterebbe quello
   -- del primo prelievo per sempre; con una scadenza troppo corta si spenderebbe

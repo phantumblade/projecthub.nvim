@@ -241,6 +241,21 @@ require("projecthub").setup({
                             -- and from further away. `b` overrides per project.
   },
 
+  -- How often to re-read git for projects you are not looking at. A project
+  -- untouched for months does not change while the dashboard is open, and
+  -- re-reading it every thirty seconds alongside the rest was most of the work
+  -- the plugin did for nothing. Age is measured on the more recent of the last
+  -- commit and the last file change.
+  --
+  -- Whatever the band, these stay immediate: the selected project (every 5s -
+  -- it is the one you are reading), returning to the window, and saving a file.
+  polling = {
+    active_days = 7,     -- up to here: full sweep every 30 seconds
+    warm_days = 30,      -- up to here: full sweep every 5 minutes
+                         -- beyond: only on open, on focus, or when selected
+    warm_interval = 300, -- seconds between sweeps of the middle band
+  },
+
   -- Custom open callback. If nil, defaults to:
   -- changing cwd (`cd`), opening README.md in main buffer, and opening Neo-tree.
   on_open = nil,

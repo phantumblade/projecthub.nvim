@@ -897,6 +897,9 @@ function M.load_git(items, on_done, force)
         local script = table.concat({
           "git -C " .. q .. " --no-optional-locks status --porcelain=v2 --branch 2>/dev/null",
           'printf "\\037COMMITS %s\\n" "$(git -C ' .. q .. ' rev-list --count HEAD 2>/dev/null || echo 0)"',
+          -- Data dell'ultimo commit: entra nello stesso processo che gia'
+          -- chiede stato e conteggio, quindi non costa uno spawn in piu'.
+          'printf "\\037LAST %s\\n" "$(git -C ' .. q .. ' log -1 --format=%ct 2>/dev/null || echo 0)"',
           'printf "\\037AUTHORS\\n"',
           "git -C " .. q .. " shortlog -sn --no-merges HEAD 2>/dev/null",
         }, "; ")
@@ -911,7 +914,7 @@ function M.load_git(items, on_done, force)
           on_exit = function()
             local g = {
               branch = "?", commits = 0, modified = 0, staged = 0,
-              untracked = 0, conflicts = 0, ahead = 0, behind = 0, dirty = false,
+              untracked = 0, conflicts = 0, ahead = 0, behind = 0, dirty = false, last_commit = 0,
             }
             local auths = {}
             local in_authors = false
@@ -920,6 +923,8 @@ function M.load_git(items, on_done, force)
                 in_authors = true
               elseif line:match("^\031COMMITS ") then
                 g.commits = tonumber(line:match("(%d+)")) or 0
+              elseif line:match("^\031LAST ") then
+                g.last_commit = tonumber(line:match("(%d+)")) or 0
               elseif in_authors then
                 local an = line:match("^%s*%d+%s+(.+)")
                 if an then
@@ -1101,6 +1106,36 @@ end
 
 -- Quanto aspettare prima di riprovare un prelievo fallito.
 local GH_FALLBACK_TTL = 300
+
+--- Da quanto un progetto e' fermo, in giorni. Si prende il segnale piu'
+--- recente fra ultimo commit e ultima modifica ai file: un progetto su cui
+--- stai lavorando senza committare da tre settimane e' vivo, e guardare solo
+--- i commit lo dichiarerebbe morto.
+--- @return number giorni, oppure 0 se non lo sappiamo ancora - nel dubbio si
+---         considera attivo, cosi' non si retrocede un progetto per ignoranza.
+function M.idle_days(item)
+  if not item then return 0 end
+  local now = os.time()
+  local best = nil
+  local lc = item.git and tonumber(item.git.last_commit) or nil
+  if lc and lc > 0 then best = lc end
+  local mt = tonumber(item.mtime) or 0
+  if mt > 0 and (not best or mt > best) then best = mt end
+  if not best then return 0 end
+  return math.max(0, math.floor((now - best) / 86400))
+end
+
+--- In quale fascia di sorveglianza ricade un progetto.
+--- @return string "attivo" | "tiepido" | "dormiente"
+function M.activity_tier(item)
+  local o = config.options.polling or {}
+  local attivo = math.max(0, tonumber(o.active_days) or 7)
+  local tiepido = math.max(attivo, tonumber(o.warm_days) or 30)
+  local d = M.idle_days(item)
+  if d <= attivo then return "attivo" end
+  if d <= tiepido then return "tiepido" end
+  return "dormiente"
+end
 
 --- Ogni quanto tornare a chiedere a GitHub stelle, fork e visibilita'.
 local function gh_ttl()
