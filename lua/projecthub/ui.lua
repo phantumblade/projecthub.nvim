@@ -4448,15 +4448,18 @@ function M.open()
     end, true)
   end
 
-  local function live_refresh_git()
+  --- @param scope table|nil i progetti da rileggere; nil significa tutti.
+  local function live_refresh_git(scope)
     if closed or is_refreshing_git then return end
     -- Priorità assoluta alla digitazione: se l'utente sta scrivendo nella ricerca,
     -- ritarda il polling di background per garantire 60 FPS e 0ms di latenza sui tasti.
     local now = (vim.uv or vim.loop).now()
     if (now - last_type_time) < 800 then return end
 
+    local targets = scope or st.all
+
     local prev_git = {}
-    for _, it in ipairs(st.all) do
+    for _, it in ipairs(targets) do
       if it.git and not it.git.none then
         prev_git[it.path] = {
           commits = it.git.commits or 0,
@@ -4466,12 +4469,12 @@ function M.open()
     end
 
     is_refreshing_git = true
-    P.load_git(st.all, function()
+    P.load_git(targets, function()
       is_refreshing_git = false
       if not closed then
         local grown = {}
         local any_changed = false
-        for _, it in ipairs(st.all) do
+        for _, it in ipairs(targets) do
           local old = prev_git[it.path]
           if old and it.git and not it.git.none then
             if (it.git.commits or 0) > (old.commits or 0) then
@@ -4579,9 +4582,19 @@ function M.open()
 
     pcall(check_drives)
 
+    -- Rileggere git per ogni progetto ogni cinque secondi costava, sui
+    -- cinquantasette progetti di una installazione reale, oltre mille comandi
+    -- git al minuto per tenere aggiornate le sei schede che si vedono. Il
+    -- progetto selezionato - quello di cui il pannello mostra righe, commit e
+    -- autori, dove una cifra vecchia si nota - resta a cinque secondi; per
+    -- tutti gli altri basta un giro completo ogni mezzo minuto, oltre a quelli
+    -- che scattano gia' quando torni sulla finestra o salvi un file.
     live_git_tick = live_git_tick + 1
-    if live_git_tick % 10 == 0 then
+    if live_git_tick % 60 == 0 then
       pcall(live_refresh_git)
+    elseif live_git_tick % 10 == 0 then
+      local sel = st.items and st.items[st.sel]
+      pcall(live_refresh_git, sel and { sel } or nil)
     end
   end))
 

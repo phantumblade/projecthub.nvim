@@ -804,9 +804,16 @@ function M.list(refresh)
   return out
 end
 
+--- @param items table i progetti da aggiornare: non deve essere per forza
+---        l'elenco intero, cosi' si puo' rinfrescare solo cio' che si guarda.
 function M.load_git(items, on_done, force)
   if force then
-    M.clear_commit_cache()
+    -- Solo le voci dei progetti che si stanno effettivamente ricaricando.
+    -- Svuotare tutta la cache anche per un giro su un progetto solo
+    -- costringeva gli altri a rileggere git alla prima occasione.
+    for _, it in ipairs(items or {}) do
+      if it.path then M.clear_commit_cache(it.path) end
+    end
   end
   M.load_github_meta_all(items)
   local queue = {}
