@@ -244,8 +244,9 @@ require("projecthub").setup({
   -- How often to re-read git for projects you are not looking at. A project
   -- untouched for months does not change while the dashboard is open, and
   -- re-reading it every thirty seconds alongside the rest was most of the work
-  -- the plugin did for nothing. Age is measured on the more recent of the last
-  -- commit and the last file change.
+  -- the plugin did for nothing. Age is measured on the most recent of: anyone's
+  -- last commit (including a collaborator's, even while it still sits on the
+  -- remote branch) and the last file change.
   --
   -- Whatever the band, these stay immediate: the selected project (every 5s -
   -- it is the one you are reading), returning to the window, and saving a file.

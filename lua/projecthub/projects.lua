@@ -897,9 +897,14 @@ function M.load_git(items, on_done, force)
         local script = table.concat({
           "git -C " .. q .. " --no-optional-locks status --porcelain=v2 --branch 2>/dev/null",
           'printf "\\037COMMITS %s\\n" "$(git -C ' .. q .. ' rev-list --count HEAD 2>/dev/null || echo 0)"',
-          -- Data dell'ultimo commit: entra nello stesso processo che gia'
-          -- chiede stato e conteggio, quindi non costa uno spawn in piu'.
-          'printf "\\037LAST %s\\n" "$(git -C ' .. q .. ' log -1 --format=%ct 2>/dev/null || echo 0)"',
+          -- Data dell'ultimo commit del repository, non del ramo locale:
+          -- --all guarda anche i rami remoti gia' scaricati. Su un progetto
+          -- condiviso l'attivita' vera puo' stare tutta li' - i commit di un
+          -- collaboratore arrivati con il fetch e non ancora incorporati - e
+          -- misurarne l'eta' su HEAD lo avrebbe dichiarato fermo da settimane
+          -- mentre qualcuno ci lavorava ieri. Entra nello stesso processo che
+          -- gia' chiede stato e conteggio, quindi non costa uno spawn in piu'.
+          'printf "\\037LAST %s\\n" "$(git -C ' .. q .. ' log -1 --format=%ct --all 2>/dev/null || echo 0)"',
           'printf "\\037AUTHORS\\n"',
           "git -C " .. q .. " shortlog -sn --no-merges HEAD 2>/dev/null",
         }, "; ")
@@ -1108,9 +1113,11 @@ end
 local GH_FALLBACK_TTL = 300
 
 --- Da quanto un progetto e' fermo, in giorni. Si prende il segnale piu'
---- recente fra ultimo commit e ultima modifica ai file: un progetto su cui
---- stai lavorando senza committare da tre settimane e' vivo, e guardare solo
---- i commit lo dichiarerebbe morto.
+--- recente fra tre cose: l'ultimo commit di chiunque - anche di un
+--- collaboratore, anche se sta ancora solo sul ramo remoto - l'ultima modifica
+--- ai file, e i commit in arrivo non ancora incorporati. Un progetto su cui
+--- lavori senza committare da tre settimane e' vivo; e lo e' anche uno su cui
+--- non tocchi nulla da un mese ma dove qualcun altro ha spinto ieri.
 --- @return number giorni, oppure 0 se non lo sappiamo ancora - nel dubbio si
 ---         considera attivo, cosi' non si retrocede un progetto per ignoranza.
 function M.idle_days(item)
