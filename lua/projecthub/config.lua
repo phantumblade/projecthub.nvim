@@ -57,6 +57,13 @@ M.defaults = {
     owners = {},
   },
 
+  -- Percorso opzionale dell'eseguibile Git. Se non specificato ProjectHub
+  -- prova il comando sul PATH e, su macOS, i percorsi standard di Xcode e
+  -- Homebrew, accettando soltanto un binario che risponde a `--version`.
+  git = {
+    command = nil,
+  },
+
   -- Icone per Proprietario, Organizzazione, Collaboratore e Fork (badge nell'ispettore).
   icons = {
     owner = "\u{edeb} ", -- nf-fa-crown

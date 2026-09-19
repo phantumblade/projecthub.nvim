@@ -1,5 +1,6 @@
 -- Rilevamento progetti per POSIZIONE e STRUTTURA.
 local config = require("projecthub.config")
+local git = require("projecthub.git")
 
 local M = {}
 
@@ -841,6 +842,8 @@ function M.load_git(items, on_done, force)
       if it.path then M.clear_commit_cache(it.path) end
     end
   end
+  -- I metadati GitHub hanno una propria cache/scadenza e devono poter essere
+  -- aggiornati anche quando lo stato Git locale era gia' stato caricato.
   M.load_github_meta_all(items)
   local queue = {}
   for _, it in ipairs(items) do
@@ -851,6 +854,15 @@ function M.load_git(items, on_done, force)
     return
   end
 
+  local git_cmd = git.shell_command()
+  if not git_cmd then
+    git.notify_unavailable()
+    for _, item in ipairs(queue) do
+      item.git = { none = true, unavailable = true }
+    end
+    if on_done then on_done() end
+    return
+  end
   -- Un solo processo per progetto (prima erano 3 concatenati): a parita' di
   -- processi concorrenti si puo' alzare il lotto e ridurre il tempo totale.
   local i, batch_size = 1, 24
@@ -895,8 +907,8 @@ function M.load_git(items, on_done, force)
       else
         local q = vim.fn.shellescape(item.path)
         local script = table.concat({
-          "git -C " .. q .. " --no-optional-locks status --porcelain=v2 --branch 2>/dev/null",
-          'printf "\\037COMMITS %s\\n" "$(git -C ' .. q .. ' rev-list --count HEAD 2>/dev/null || echo 0)"',
+          git_cmd .. " -C " .. q .. " --no-optional-locks status --porcelain=v2 --branch 2>/dev/null",
+          'printf "\\037COMMITS %s\\n" "$(' .. git_cmd .. " -C " .. q .. ' rev-list --count HEAD 2>/dev/null || echo 0)"',
           -- Data dell'ultimo commit del repository, non del ramo locale:
           -- --all guarda anche i rami remoti gia' scaricati. Su un progetto
           -- condiviso l'attivita' vera puo' stare tutta li' - i commit di un
@@ -904,9 +916,9 @@ function M.load_git(items, on_done, force)
           -- misurarne l'eta' su HEAD lo avrebbe dichiarato fermo da settimane
           -- mentre qualcuno ci lavorava ieri. Entra nello stesso processo che
           -- gia' chiede stato e conteggio, quindi non costa uno spawn in piu'.
-          'printf "\\037LAST %s\\n" "$(git -C ' .. q .. ' log -1 --format=%ct --all 2>/dev/null || echo 0)"',
+          'printf "\\037LAST %s\\n" "$(' .. git_cmd .. " -C " .. q .. ' log -1 --format=%ct --all 2>/dev/null || echo 0)"',
           'printf "\\037AUTHORS\\n"',
-          "git -C " .. q .. " shortlog -sn --no-merges HEAD 2>/dev/null",
+          git_cmd .. " -C " .. q .. " shortlog -sn --no-merges HEAD 2>/dev/null",
         }, "; ")
 
         local out = {}
@@ -1195,12 +1207,18 @@ function M.get_commit_details(path, limit, force)
     return {}, {}
   end
 
+  local git_cmd = git.shell_command()
+  if not git_cmd then
+    git.notify_unavailable()
+    return {}, {}
+  end
+
   local author_stats, owners_set, me_set
   local cached_authors = (not force) and AUTHORS_CACHE[path] or nil
   if cached_authors then
     author_stats, owners_set, me_set = cached_authors.stats, cached_authors.owners, cached_authors.me
   else
-    local shortlog_cmd = string.format("git -C %s shortlog -sn --no-merges HEAD 2>/dev/null", vim.fn.shellescape(path))
+    local shortlog_cmd = string.format("%s -C %s shortlog -sn --no-merges HEAD 2>/dev/null", git_cmd, vim.fn.shellescape(path))
     local h_s = io.popen(shortlog_cmd)
     local gh_meta = M.get_github_meta(path)
     local repo_owner_raw = (gh_meta and gh_meta.owner) and gh_meta.owner or ""
@@ -1221,7 +1239,7 @@ function M.get_commit_details(path, limit, force)
 
     if LOCAL_GIT_NAME == nil then
       LOCAL_GIT_NAME = ""
-      local p_git = io.popen("git config user.name 2>/dev/null")
+      local p_git = io.popen(git_cmd .. " config user.name 2>/dev/null")
       if p_git then
         local g_out = p_git:read("*a")
         p_git:close()
@@ -1316,7 +1334,7 @@ function M.get_commit_details(path, limit, force)
   local num_authors = #author_stats
   local show_author = num_authors > 1
 
-  local cmd = string.format("git -C %s log HEAD -n %d --pretty=format:\"%%h|%%cr|%%an|%%s\" 2>/dev/null", vim.fn.shellescape(path), limit)
+  local cmd = string.format("%s -C %s log HEAD -n %d --pretty=format:\"%%h|%%cr|%%an|%%s\" 2>/dev/null", git_cmd, vim.fn.shellescape(path), limit)
   local handle = io.popen(cmd)
   local commits = {}
   if handle then
@@ -1580,15 +1598,23 @@ local function do_refresh(path, want_fetch, authors, on_change, on_finish)
   state.running = true
   FETCH_STATE[path] = state
 
+  local git_cmd = git.shell_command()
+  if not git_cmd then
+    state.running = false
+    git.notify_unavailable()
+    if on_finish then on_finish() end
+    return
+  end
+
   local q = vim.fn.shellescape(path)
   local steps = {}
   if want_fetch then
     -- --no-tags: aggiorna i rami gia' tracciati senza trascinarsi dietro
     -- l'intero universo dei tag dei progetti grandi.
-    steps[#steps + 1] = "git -C " .. q .. " fetch --quiet --no-tags 2>/dev/null"
+    steps[#steps + 1] = git_cmd .. " -C " .. q .. " fetch --quiet --no-tags 2>/dev/null"
   end
-  steps[#steps + 1] = 'printf "\\037UP %s\\n" "$(git -C ' .. q .. ' rev-parse --abbrev-ref @{u} 2>/dev/null)"'
-  steps[#steps + 1] = "git -C " .. q .. " log HEAD..@{u} --pretty=format:'%h|%cr|%an|%s' 2>/dev/null"
+  steps[#steps + 1] = 'printf "\\037UP %s\\n" "$(' .. git_cmd .. " -C " .. q .. ' rev-parse --abbrev-ref @{u} 2>/dev/null)"'
+  steps[#steps + 1] = git_cmd .. " -C " .. q .. " log HEAD..@{u} --pretty=format:'%h|%cr|%an|%s' 2>/dev/null"
   local script = table.concat(steps, "; ")
 
   local out = {}
@@ -1900,7 +1926,15 @@ function M.async_load_github_meta(path, callback, force)
     return
   end
 
-  local r_cmd = string.format("git -C %s remote get-url origin 2>/dev/null", vim.fn.shellescape(path))
+  local git_cmd = git.shell_command()
+  if not git_cmd then
+    -- Il fallback locale legge gia' origin da .git/config e mantiene almeno
+    -- nome, proprietario e URL anche quando Git non puo' essere avviato.
+    M.get_github_meta(path)
+    done()
+    return
+  end
+  local r_cmd = string.format("%s -C %s remote get-url origin 2>/dev/null", git_cmd, vim.fn.shellescape(path))
   -- se il processo muore senza produrre output, on_stdout non scatta: senza
   -- questa rete lo slot della coda non verrebbe mai liberato
   local job = vim.fn.jobstart(r_cmd, {
@@ -2038,7 +2072,9 @@ function M.get_github_url(path)
     return meta.web_url
   end
 
-  local r_cmd = string.format("git -C %s remote get-url origin 2>/dev/null", vim.fn.shellescape(path))
+  local git_cmd = git.shell_command()
+  if not git_cmd then return nil end
+  local r_cmd = string.format("%s -C %s remote get-url origin 2>/dev/null", git_cmd, vim.fn.shellescape(path))
   local h_r = io.popen(r_cmd)
   if h_r then
     local origin_url = vim.trim(h_r:read("*a") or "")

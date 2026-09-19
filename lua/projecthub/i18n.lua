@@ -192,6 +192,7 @@ M.locales = {
     notify_note_removed = "Nota per '%s' rimossa",
     notify_lang_switched = "Lingua impostata su italiano",
     notify_git_update = "Attività Git rilevata su '%s': stato aggiornato!",
+    notify_git_unavailable = "Git non è utilizzabile: ProjectHub non può leggere rami e commit.\nCorrezione suggerita: %s",
     notify_sound_enabled = "Effetti sonori abilitati",
     notify_sound_disabled = "Effetti sonori disattivati (Mute)",
 
@@ -431,6 +432,7 @@ M.locales = {
     notify_note_removed = "Note for '%s' removed",
     notify_lang_switched = "Language set to English",
     notify_git_update = "Git activity detected on '%s': status updated!",
+    notify_git_unavailable = "Git is unavailable: ProjectHub cannot read branches and commits.\nSuggested fix: %s",
     notify_sound_enabled = "Sound FX enabled",
     notify_sound_disabled = "Sound FX muted",
 

@@ -5,6 +5,7 @@ local config = require("projecthub.config")
 local i18n = require("projecthub.i18n")
 local sound = require("projecthub.sound")
 local commit_tags = require("projecthub.commit_tags")
+local git = require("projecthub.git")
 
 local ICON_ERROR = "\u{f0156}"
 local ICON_SUCCESS = "\u{f012c}"
@@ -601,7 +602,8 @@ local function get_author_token(word, st)
 
   -- 2. Check local git config user.name
   if not matched_name then
-    local p_git = io.popen("git config user.name 2>/dev/null")
+    local git_cmd = git.shell_command()
+    local p_git = git_cmd and io.popen(git_cmd .. " config user.name 2>/dev/null") or nil
     if p_git then
       local g_out = p_git:read("*a")
       p_git:close()

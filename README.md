@@ -77,8 +77,15 @@
 ## Requirements
 
 - **Neovim >= 0.10**
-- **[git](https://git-scm.com/)** available on `$PATH`
+- A working **[git](https://git-scm.com/)** installation (on `$PATH`, in a
+  standard macOS location, or selected through `git.command`)
 - A **[Nerd Font](https://www.nerdfonts.com/)** for terminal icons
+
+ProjectHub verifies that Git can actually run, rather than only checking that a
+binary exists. On macOS it also falls back to the Git binary bundled inside
+Xcode when `/usr/bin/git` is temporarily blocked (for example after an Xcode
+license update). A custom executable can be selected with
+`git = { command = "/absolute/path/to/git" }` in `setup()`.
 
 ### Optional Integrations
 - **[`gh` (GitHub CLI)](https://cli.github.com/)**: GitHub stars, forks, and visibility metadata. Also required by the [star watcher](#star-watcher), which needs it authenticated (`gh auth login`).

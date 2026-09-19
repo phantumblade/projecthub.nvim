@@ -5,6 +5,9 @@ local M = {}
 function M.setup(opts)
   local cfg = require("projecthub.config")
   cfg.setup(opts)
+  -- setup() puo' cambiare git.command: non conservare una scelta fatta con la
+  -- configurazione precedente.
+  require("projecthub.git").reset()
   M.register_commands()
 
   -- La sorveglianza parte solo se richiesta esplicitamente: di default il
