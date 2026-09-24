@@ -3927,8 +3927,15 @@ function M.open()
           )
           return
         else
-          P.remove_custom_extra(old_p.path)
-          P.remove_recent(old_p.path)
+          if not P.untrack_project(old_p.path) then
+            notify(
+              i18n.t("notify_op_failed_title", i18n.t("err_write_title")),
+              i18n.t("notify_op_failed_body", i18n.t("err_write_body")),
+              "error",
+              "error"
+            )
+            return
+          end
 
           local ok, code, arg = P.add_custom_extra(target_path)
           if ok then
@@ -4028,8 +4035,16 @@ function M.open()
   map(all_bufs, "n", { "d" }, function()
     local p = st.items[st.sel]
     if p then
-      P.remove_recent(p.path)
-      P.remove_custom_extra(p.path)
+      local ok = P.untrack_project(p.path)
+      if not ok then
+        notify(
+          i18n.t("notify_op_failed_title", i18n.t("err_write_title")),
+          i18n.t("notify_op_failed_body", i18n.t("err_write_body")),
+          "error",
+          "error"
+        )
+        return
+      end
       notify(i18n.t("notify_removed_title"), i18n.t("notify_removed_body", p.name), "delete", "delete")
       st.all = P.list(true)
       filter(st)

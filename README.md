@@ -390,7 +390,7 @@ Markdown is skipped on purpose. It is not recognised alongside the other languag
 | `b` | **Bell** | Mute or unmute new-commit notices; the bell beside the history title shows the state |
 | `a` | **Add Project** | Open interactive folder browser to track a new project |
 | `r` | **Reconnect** | Reconnect a missing/moved project to its new directory |
-| `d` | **Untrack** | Remove project tracking from custom extras |
+| `d` | **Untrack** | Hide the project from ProjectHub, including projects discovered through configured roots |
 | `L` | **Language** | Switch UI language instantly between English and Italian |
 | `q` / `<Esc>` | **Quit** | Close the dashboard or dismiss the current modal |
 | `<ScrollWheel>` | **Mouse Scroll** | Scroll cards list or inspector preview with inertia |
@@ -545,10 +545,12 @@ Pass `--keep` to reuse the previous sandbox instead of starting clean.
 
 ## Data Storage
 
-ProjectHub stores custom projects, persistent notes, recents, and Git metadata cache in:
+ProjectHub stores custom projects, explicit tracking exclusions, persistent
+notes, recents, and Git metadata cache in:
 ```
 ~/.local/share/nvim/projecthub/
   ├── custom_projects.json
+  ├── hidden_projects.json
   ├── github_meta.json
   ├── notes.json
   ├── stars.json

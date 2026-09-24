@@ -44,7 +44,12 @@ vim.fn.mkdir(DATA_DIR, "p")
 
 local RECENTS_FILE = DATA_DIR .. "/recents.json"
 local CUSTOM_PROJECTS_FILE = DATA_DIR .. "/custom_projects.json"
+local HIDDEN_PROJECTS_FILE = DATA_DIR .. "/hidden_projects.json"
 local PROJECTS_CACHE_FILE = DATA_DIR .. "/projects_cache.json"
+-- Deve essere dichiarata prima delle funzioni add/remove: in Lua una `local`
+-- dichiarata piu' avanti non e' visibile alle funzioni precedenti, che quindi
+-- finivano per azzerare una globale omonima invece della cache vera.
+local cache
 
 --- Forma canonica di un percorso, da usare ogni volta che serve come identita'.
 --- Le barre ripetute non cambiano il file a cui si punta - "//Volumes/x" e
@@ -184,6 +189,69 @@ local function norm_path(p)
   return M.normalize_path(p):lower()
 end
 
+local function read_path_list(file)
+  if vim.fn.filereadable(file) == 0 then return {} end
+  local ok, lines = pcall(vim.fn.readfile, file)
+  if not ok or not lines or #lines == 0 then return {} end
+  local ok_json, data = pcall(vim.json.decode, table.concat(lines, "\n"))
+  if not (ok_json and type(data) == "table") then return {} end
+
+  local out, seen = {}, {}
+  for _, path in ipairs(data) do
+    if type(path) == "string" and path ~= "" then
+      local clean = M.normalize_path(path)
+      local key = norm_path(clean)
+      if not seen[key] then
+        seen[key] = true
+        out[#out + 1] = clean
+      end
+    end
+  end
+  return out
+end
+
+local function write_path_list(file, paths)
+  local ok_json, encoded = pcall(vim.json.encode, paths)
+  if not ok_json or not encoded then return false end
+  local ok_write, result = pcall(vim.fn.writefile, { encoded }, file)
+  return ok_write and result == 0
+end
+
+function M.get_hidden_projects()
+  return read_path_list(HIDDEN_PROJECTS_FILE)
+end
+
+local function hidden_lookup()
+  local set = {}
+  for _, path in ipairs(M.get_hidden_projects()) do
+    set[norm_path(path)] = true
+  end
+  return set
+end
+
+function M.is_hidden(path)
+  if not path or path == "" then return false end
+  return hidden_lookup()[norm_path(path)] == true
+end
+
+local function set_hidden(path, hidden)
+  local clean = M.normalize_path(path)
+  local key = norm_path(clean)
+  local next_paths, found = {}, false
+  for _, current in ipairs(M.get_hidden_projects()) do
+    if norm_path(current) == key then
+      found = true
+      if hidden then next_paths[#next_paths + 1] = clean end
+    else
+      next_paths[#next_paths + 1] = current
+    end
+  end
+  if hidden and not found then next_paths[#next_paths + 1] = clean end
+  if not write_path_list(HIDDEN_PROJECTS_FILE, next_paths) then return false end
+  cache = nil
+  return true
+end
+
 function M.is_project(target_path)
   if not target_path or target_path == "" then return false end
   local normalized = norm_path(target_path)
@@ -222,12 +290,25 @@ function M.add_custom_extra(path)
   end
 
   local clean_p = M.normalize_path(expanded)
+  local was_hidden = M.is_hidden(clean_p)
+  if was_hidden and not set_hidden(clean_p, false) then
+    return false, "write_error", nil
+  end
   local extras = M.get_custom_extras()
-  extras[#extras + 1] = clean_p
-  local ok = pcall(vim.fn.writefile, { vim.json.encode(extras) }, CUSTOM_PROJECTS_FILE)
+  local already_extra = false
+  for _, current in ipairs(extras) do
+    if norm_path(current) == norm_path(clean_p) then
+      already_extra = true
+      break
+    end
+  end
+  if not already_extra then extras[#extras + 1] = clean_p end
+  local ok_write, result = pcall(vim.fn.writefile, { vim.json.encode(extras) }, CUSTOM_PROJECTS_FILE)
+  local ok = ok_write and result == 0
   cache = nil
 
   if not ok then
+    if was_hidden then set_hidden(clean_p, true) end
     return false, "write_error", nil
   end
 
@@ -246,6 +327,21 @@ function M.remove_custom_extra(path)
   end
   pcall(vim.fn.writefile, { vim.json.encode(new_list) }, CUSTOM_PROJECTS_FILE)
   cache = nil
+end
+
+--- Esclude esplicitamente un progetto da tutte le fonti di scoperta. Non
+--- cancella la cartella ne' i dati del progetto: registra soltanto l'intento
+--- dell'utente, cosi' roots, extra, recents e cache non lo resuscitano.
+--- Un successivo add_custom_extra() rimuove automaticamente l'esclusione.
+---@return boolean ok
+function M.untrack_project(path)
+  if not path or path == "" then return false end
+  path = M.normalize_path(path)
+  if not set_hidden(path, true) then return false end
+  M.remove_custom_extra(path)
+  M.remove_recent(path)
+  cache = nil
+  return true
 end
 
 function M.get_recents()
@@ -676,8 +772,6 @@ local function is_mine(dir)
   return false, owner
 end
 
-local cache
-
 function M.sort(list)
   table.sort(list, function(a, b)
     local a_rec = a.recent_rank ~= nil
@@ -693,9 +787,10 @@ end
 
 function M.paths()
   local seen, out = {}, {}
+  local hidden = hidden_lookup()
   local function add(path)
     path = M.normalize_path(path)
-    if seen[path] or vim.fn.isdirectory(path) == 0 then return end
+    if seen[path] or hidden[norm_path(path)] or vim.fn.isdirectory(path) == 0 then return end
     seen[path] = true
     out[#out + 1] = path
   end
@@ -728,6 +823,7 @@ function M.list(refresh)
   local seen = {}
   local out = {}
   local disk_cache = load_projects_cache()
+  local hidden = hidden_lookup()
 
   for _, path in ipairs(M.paths()) do
     local norm_path = M.normalize_path(path)
@@ -773,54 +869,54 @@ function M.list(refresh)
     missing_candidates[norm] = true
   end
 
-  for norm_path, _ in pairs(missing_candidates) do
-    if not seen[norm_path] and vim.fn.isdirectory(norm_path) == 0 then
-      seen[norm_path] = true
-      local vol_info = M.get_volume_info(norm_path)
-      local cached = disk_cache[norm_path] or {}
+  for candidate_path, _ in pairs(missing_candidates) do
+    if not hidden[norm_path(candidate_path)] and not seen[candidate_path] and vim.fn.isdirectory(candidate_path) == 0 then
+      seen[candidate_path] = true
+      local vol_info = M.get_volume_info(candidate_path)
+      local cached = disk_cache[candidate_path] or {}
 
       if vol_info.is_external or cached.is_external then
         local v_name = vol_info.volume_name or cached.volume_name or "SSD"
-        local p_name = cached.name or vim.fn.fnamemodify(norm_path, ":t")
+        local p_name = cached.name or vim.fn.fnamemodify(candidate_path, ":t")
         local p_type = cached.type or "SSD"
         local p_desc = cached.desc or (require("projecthub.i18n").t("external_box_line1") .. " " .. v_name)
-        local p_dir = cached.dir or vim.fn.fnamemodify(norm_path, ":h"):gsub("^" .. vim.pesc(home), "~")
+        local p_dir = cached.dir or vim.fn.fnamemodify(candidate_path, ":h"):gsub("^" .. vim.pesc(home), "~")
 
         out[#out + 1] = {
           mine = (cached.mine ~= nil) and cached.mine or true,
           owner = cached.owner,
-          path = norm_path,
+          path = candidate_path,
           name = p_name,
           dir = p_dir,
           desc = p_desc,
           type = p_type,
           ago = cached.ago or require("projecthub.i18n").t("unknown"),
           mtime = cached.mtime or 0,
-          recent_rank = recents_map[norm_path] or 999,
+          recent_rank = recents_map[candidate_path] or 999,
           is_missing = false,
           is_external = true,
           is_disconnected = true,
           volume_name = v_name,
           mount_point = vol_info.mount_point or cached.mount_point,
           languages = cached.languages,
-          search = p_name .. " " .. norm_path .. " " .. v_name .. " " .. require("projecthub.i18n").t("external_search_terms"),
+          search = p_name .. " " .. candidate_path .. " " .. v_name .. " " .. require("projecthub.i18n").t("external_search_terms"),
         }
       else
         out[#out + 1] = {
           mine = true,
           owner = nil,
-          path = norm_path,
-          name = vim.fn.fnamemodify(norm_path, ":t"),
-          dir = vim.fn.fnamemodify(norm_path, ":h"):gsub("^" .. vim.pesc(home), "~"),
+          path = candidate_path,
+          name = vim.fn.fnamemodify(candidate_path, ":t"),
+          dir = vim.fn.fnamemodify(candidate_path, ":h"):gsub("^" .. vim.pesc(home), "~"),
           desc = require("projecthub.i18n").t("missing_desc"),
           type = require("projecthub.i18n").t("missing_type"),
           ago = require("projecthub.i18n").t("unknown"),
           mtime = 0,
-          recent_rank = recents_map[norm_path] or 999,
+          recent_rank = recents_map[candidate_path] or 999,
           is_missing = true,
           is_external = false,
           is_disconnected = false,
-          search = vim.fn.fnamemodify(norm_path, ":t") .. " " .. norm_path .. " " .. require("projecthub.i18n").t("missing_search_terms"),
+          search = vim.fn.fnamemodify(candidate_path, ":t") .. " " .. candidate_path .. " " .. require("projecthub.i18n").t("missing_search_terms"),
         }
       end
     end
