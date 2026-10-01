@@ -502,6 +502,37 @@ end
 --- uno dei file indicatori usati da project_type (package.json, Cargo.toml,
 --- build.gradle, ...). Non scende in profondita': serve a popolare la lista
 --- partendo da una cartella-contenitore, non a rastrellare il disco.
+--- Cartella che contiene davvero il repository di un progetto.
+---
+--- Di solito e' il progetto stesso. Ma un progetto puo' essere una cartella che
+--- raccoglie documenti, specifiche e, un livello sotto, l'applicazione con il
+--- suo `.git` (per esempio `Manuale_PAI/` con dentro `app/`): aggiunto dalla
+--- radice, senza questo passaggio non mostrava ne' commit ne' autori. Se la
+--- cartella non ha un `.git` ma UNA sola sottocartella diretta ce l'ha, i dati
+--- git vengono da li'. Con due o piu' sottocartelle git non si sceglie a caso:
+--- resta senza repository, come prima.
+---@param path string
+---@return string|nil
+function M.git_root(path)
+  if not path or path == "" then return nil end
+  if vim.fn.isdirectory(path .. "/.git") == 1 then return path end
+  local ok, handle = pcall(vim.uv.fs_scandir, path)
+  if not ok or not handle then return nil end
+  local trovata = nil
+  while true do
+    local name, t = vim.uv.fs_scandir_next(handle)
+    if not name then break end
+    if t == "directory" and not name:match("^%.") and not M.is_ignored(name) then
+      local sotto = path .. "/" .. name
+      if vim.fn.isdirectory(sotto .. "/.git") == 1 then
+        if trovata then return nil end
+        trovata = sotto
+      end
+    end
+  end
+  return trovata
+end
+
 ---@param dir string
 ---@return string[] percorsi assoluti dei progetti trovati
 function M.detect_projects_in(dir)
@@ -743,7 +774,9 @@ local function ago(dir)
 end
 
 local function remote_owner(dir)
-  local cfg = dir .. "/.git/config"
+  local repo = M.git_root(dir)
+  if not repo then return nil end
+  local cfg = repo .. "/.git/config"
   if vim.fn.filereadable(cfg) == 0 then return nil end
   local ok, lines = pcall(vim.fn.readfile, cfg, "", 80)
   if not ok then return nil end
@@ -997,11 +1030,11 @@ function M.load_git(items, on_done, force)
     for j = 0, batch_n - 1 do
       local item = queue[i + j]
       item.git_done = nil
-      local git_dir = item.path .. "/.git"
-      if vim.fn.isdirectory(git_dir) == 0 then
+      local repo = M.git_root(item.path)
+      if not repo then
         finish(item, nil, nil)
       else
-        local q = vim.fn.shellescape(item.path)
+        local q = vim.fn.shellescape(repo)
         local script = table.concat({
           git_cmd .. " -C " .. q .. " --no-optional-locks status --porcelain=v2 --branch 2>/dev/null",
           'printf "\\037COMMITS %s\\n" "$(' .. git_cmd .. " -C " .. q .. ' rev-list --count HEAD 2>/dev/null || echo 0)"',
@@ -1297,8 +1330,8 @@ function M.get_commit_details(path, limit, force)
     return COMMIT_CACHE[key].commits, COMMIT_CACHE[key].stats
   end
 
-  local git_dir = path .. "/.git"
-  if vim.fn.isdirectory(git_dir) == 0 then
+  local repo = M.git_root(path)
+  if not repo then
     COMMIT_CACHE[key] = { commits = {}, stats = {} }
     return {}, {}
   end
@@ -1314,7 +1347,7 @@ function M.get_commit_details(path, limit, force)
   if cached_authors then
     author_stats, owners_set, me_set = cached_authors.stats, cached_authors.owners, cached_authors.me
   else
-    local shortlog_cmd = string.format("%s -C %s shortlog -sn --no-merges HEAD 2>/dev/null", git_cmd, vim.fn.shellescape(path))
+    local shortlog_cmd = string.format("%s -C %s shortlog -sn --no-merges HEAD 2>/dev/null", git_cmd, vim.fn.shellescape(repo))
     local h_s = io.popen(shortlog_cmd)
     local gh_meta = M.get_github_meta(path)
     local repo_owner_raw = (gh_meta and gh_meta.owner) and gh_meta.owner or ""
@@ -1430,7 +1463,7 @@ function M.get_commit_details(path, limit, force)
   local num_authors = #author_stats
   local show_author = num_authors > 1
 
-  local cmd = string.format("%s -C %s log HEAD -n %d --pretty=format:\"%%h|%%cr|%%an|%%s\" 2>/dev/null", git_cmd, vim.fn.shellescape(path), limit)
+  local cmd = string.format("%s -C %s log HEAD -n %d --pretty=format:\"%%h|%%cr|%%an|%%s\" 2>/dev/null", git_cmd, vim.fn.shellescape(repo), limit)
   local handle = io.popen(cmd)
   local commits = {}
   if handle then
@@ -1702,7 +1735,7 @@ local function do_refresh(path, want_fetch, authors, on_change, on_finish)
     return
   end
 
-  local q = vim.fn.shellescape(path)
+  local q = vim.fn.shellescape(M.git_root(path) or path)
   local steps = {}
   if want_fetch then
     -- --no-tags: aggiorna i rami gia' tracciati senza trascinarsi dietro
@@ -1834,7 +1867,7 @@ end
 --- per far sparire il divider senza attendere il giro successivo.
 function M.recount_incoming(path, on_done)
   if not incoming_opts().enabled then return end
-  if vim.fn.isdirectory(path .. "/.git") == 0 then return end
+  if not M.git_root(path) then return end
   do_refresh(path, false, nil, nil, on_done)
 end
 
@@ -1946,7 +1979,7 @@ function M.get_github_meta(path)
     return c
   end
 
-  local git_config = path .. "/.git/config"
+  local git_config = (M.git_root(path) or path) .. "/.git/config"
   if vim.fn.filereadable(git_config) == 1 then
     local ok_lines, lines = pcall(vim.fn.readfile, git_config)
     if ok_lines and lines then
@@ -2015,8 +2048,8 @@ function M.async_load_github_meta(path, callback, force)
     end
   end
 
-  local git_dir = path .. "/.git"
-  if vim.fn.isdirectory(git_dir) == 0 then
+  local repo = M.git_root(path)
+  if not repo then
     GH_CACHE[path] = false
     done()
     return
@@ -2030,7 +2063,7 @@ function M.async_load_github_meta(path, callback, force)
     done()
     return
   end
-  local r_cmd = string.format("%s -C %s remote get-url origin 2>/dev/null", git_cmd, vim.fn.shellescape(path))
+  local r_cmd = string.format("%s -C %s remote get-url origin 2>/dev/null", git_cmd, vim.fn.shellescape(repo))
   -- se il processo muore senza produrre output, on_stdout non scatta: senza
   -- questa rete lo slot della coda non verrebbe mai liberato
   local job = vim.fn.jobstart(r_cmd, {
@@ -2170,7 +2203,7 @@ function M.get_github_url(path)
 
   local git_cmd = git.shell_command()
   if not git_cmd then return nil end
-  local r_cmd = string.format("%s -C %s remote get-url origin 2>/dev/null", git_cmd, vim.fn.shellescape(path))
+  local r_cmd = string.format("%s -C %s remote get-url origin 2>/dev/null", git_cmd, vim.fn.shellescape(M.git_root(path) or path))
   local h_r = io.popen(r_cmd)
   if h_r then
     local origin_url = vim.trim(h_r:read("*a") or "")
